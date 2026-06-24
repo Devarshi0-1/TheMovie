@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 4.1 — intent gate (`src/agent/intent.ts`): a cheap `gpt-5-mini` `generateObject({ schema })` guardrail classifying query relevance/intent before the expensive agent loop. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embedding service + ingestion pipeline.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 4.2 — tiered retrieval tools (`src/agent/tools.ts`): `search_movies_sql`, `semantic_search_movies` (query embed → pgvector cosine kNN), `fetch_from_tmdb` (write-back), each via the AI SDK's `tool({ inputSchema, execute })` with Zod schemas. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embeddings + ingestion · ✅ Phase 4.1 intent gate.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -12,6 +12,7 @@
 > - [ ] **Phase 3.1 pgvector migration** (`0002`) — apply to a live DB; confirm the `vector` extension enables and the HNSW index builds.
 > - [ ] **Phase 3.3 `source_hash` migration** (`0003`) — apply to a live DB; confirm the column adds.
 > - [ ] **Phase 3.3 ingestion run** — `bun run ingest --pages=1` against live TMDB + Postgres + `OPENAI_API_KEY`: confirm rows upsert with vectors, a re-run is a no-op (all skipped), and `--incremental` pulls now-playing.
+> - [ ] **Phase 4.1 intent gate** — call `runIntentGate` with a real `OPENAI_API_KEY`: confirm `gpt-5-mini` classifies a movie query as allowed and an off-topic/injection query as blocked, and that prompt-cache reads register in the usage log.
 
 ## 📦 Tech Stack
 
@@ -140,9 +141,10 @@ The data engine behind semantic search. Embeds movie text so the agent can find 
 
 The conversational window: natural-language movie discovery powered by a **Vercel AI SDK** agent (`streamText` + tools) over GPT + the vector store. The full pipeline (intent gate → tiered retrieval → synthesis) is specified in `CLAUDE.md` → "The chat agent: query-handling pipeline".
 
-### Milestone 4.1: Intent gate (guardrail)
-* [ ] **`src/agent/intent.ts`**: a cheap **`gpt-5-mini`** `generateObject({ schema })` call (shared **Zod** schema) returning `{ relevant, intent, ... }`.
-* [ ] **Block** off-topic, abusive, and prompt-injection queries **before** the expensive `gpt-5` loop runs (safety + cost control). Return a friendly refusal for blocked queries.
+### Milestone 4.1: Intent gate (guardrail)  _(complete; live model call pending env)_
+* [x] **`src/agent/intent.ts`**: `runIntentGate(query)` runs a cheap **`gpt-5-mini`** `generateObject({ schema })` call returning `{ intent, relevant, safe, confidence, reason }`. Stable system prompt kept first (volatile query last) for OpenAI prompt caching; token usage (incl. cached reads) logged per call. The classifier is injectable so the gate is unit-tested without an OpenAI call.
+* [x] **Block** off-topic, abusive, and prompt-injection queries **before** the expensive `gpt-5` loop (safety + cost control), via `decideGate` → `{ allowed, refusal? }`. Blocks when `!relevant || !safe || intent ∈ {off_topic, injection}` (relevant/safe treated as authoritative — defense in depth); empty queries short-circuit without a model call. Returns a friendly, non-echoing refusal.
+* [x] **Shared Zod schema** in `src/schemas/intent.ts` (`IntentResultSchema` + `INTENTS` + pure `isBlocked`/`refusalFor`/`decideGate`). _Defined in the backend for now; lifts to `packages/schemas/` in Phase 7.1 when the frontend is a second consumer (deferred to avoid repo-wide workspace infra ahead of need)._ Verified offline (`src/schemas/intent.test.ts` + `src/agent/intent.test.ts`); live `gpt-5-mini` call pending a real `OPENAI_API_KEY`.
 
 ### Milestone 4.2: Retrieval tools (tiered)
 * [ ] **`search_movies_sql`**: structured/exact lookups (title, genre, year) against Postgres. Cheapest, most precise — the agent's first choice for concrete queries.
