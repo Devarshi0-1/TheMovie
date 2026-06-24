@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 2.2 — `movies` table + persistence. _(✅ Phase 0 fixes · ✅ Phase 1 foundation — auth hardening deferred to Phase 6 · ✅ Phase 2.1 TMDB caching.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 3 — vector & embedding pipeline (pgvector extension + `embedding` column, OpenAI embedding service, ingestion). _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 data engine + `movies` table.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 ## 📦 Tech Stack
 
@@ -102,9 +102,9 @@ Known issues in the current code, to be resolved before building on top.
 * [x] **Stale-while-revalidate** caching in Redis for trending / search / details (1h TTL).
 
 ### Milestone 2.2: Database Schema (Drizzle)
-* [ ] **`movies` table**: `id`, `tmdb_id` (unique), `title`, `overview`, `poster_path`, `backdrop_path`, `release_date`, `genres` (jsonb), `keywords` (jsonb), `metadata` (jsonb).
-* [ ] **GIN index** on `movies.metadata` for JSON search performance.
-* [ ] **`embedding` column**: `vector(1536)` on `movies` (pgvector) — populated by the ingestion pipeline (Phase 3).
+* [x] **`movies` table** (`src/db/schema.ts`): `id`, `tmdb_id` (unique), `title`, `overview`, `poster_path`, `backdrop_path`, `release_date`, `genres`/`keywords`/`metadata` (jsonb), timestamps. Migration `0001_add_movies.sql`. _Live apply pending a reachable Postgres._
+* [x] **GIN index** on `movies.metadata` (`movies_metadata_gin_idx`) for JSON containment queries.
+* [ ] **`embedding` column**: `vector(1536)` on `movies` (pgvector) — deferred to **Phase 3.1** (requires the pgvector extension); populated by the ingestion pipeline.
 
 ---
 
