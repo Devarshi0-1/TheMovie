@@ -15,6 +15,13 @@
       "when": 1782329535979,
       "tag": "0001_add_movies",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782330436164,
+      "tag": "0002_add_embedding",
+      "breakpoints": true
     }
   ]
 }
