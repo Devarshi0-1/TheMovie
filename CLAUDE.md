@@ -56,6 +56,27 @@ The **backend** deliberately avoids npm packages when Bun ships a native equival
    - **Cache AI outputs** in Redis where reusable (e.g. per-movie review summaries) with sensible TTLs.
    - **Log token usage** (`usage` from each AI SDK call — prompt/completion/cached) per request so cost is observable.
 
+## Working cadence & context hygiene
+
+Treat the **repo as the source of truth, not the context window.** Every durable fact lives in files (this doc, `backend/ROADMAP.md`, tests, commits), so work proceeds in milestone-sized units and context can be reset between them with zero loss.
+
+**One loop per ROADMAP milestone:**
+1. **Fresh context** — read `CLAUDE.md` + `backend/ROADMAP.md` (start at the `▸ Current focus` pointer), then only the files the item touches.
+2. **Plan** — propose the approach and get sign-off for non-trivial work (see "How to work" #1).
+3. **Build** — on a `feat/` / `fix/` branch; read narrowly; delegate broad searches to subagents.
+4. **Test + verify** — the three test artifacts, `bun test`, confirm behavior.
+5. **Checkpoint** — tick the `ROADMAP.md` boxes, commit, open a PR.
+6. **Reset** — after merge, clear context and start the next milestone clean.
+
+A merged PR is a save point. Once work is committed, prefer **`/clear` at the milestone boundary** over `/compact`; use `/compact` only mid-milestone if context fills before a natural checkpoint.
+
+**Keep context lean:**
+- **Delegate fan-out reads to subagents** (Explore / general-purpose) — they return conclusions, not file dumps.
+- **Never read these whole** — `backend/tmdb.d.ts` (~960 KB), `backend/tmdb-bundled.yaml` (~3.9 MB), `backend/bun.lock`. `grep` / targeted-read only.
+- **Externalize the plan** with a todo list rather than holding it in prose.
+- **Run long-lived processes** (dev server, ingestion jobs) in the background so their output doesn't flood context.
+- **Trust this file — don't re-derive** settled decisions (OpenAI-only, Zod everywhere, three-artifact tests).
+
 ## The chat agent: query-handling pipeline
 
 Every user query flows through three stages, built with the **Vercel AI SDK** as plain TypeScript control flow + tool calling. Per-user conversation history is persisted in Postgres for multi-turn memory (loaded on each request, appended via `streamText`'s `onFinish`).
