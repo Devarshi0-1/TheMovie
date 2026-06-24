@@ -87,7 +87,6 @@ export const searchMovie = async (query: string) => {
 type MovieDetailsResponse =
     paths['/3/movie/{movie_id}']['get']['responses']['200']['content']['application/json']
 
-
 export const getMovieDetails = async (movieId: string) => {
     const cachedKey = `movie:${movieId}:details`
 
@@ -110,3 +109,55 @@ export const getMovieDetails = async (movieId: string) => {
 
     return movieDetails
 }
+
+// ── Ingestion catalog endpoints (Phase 3.3) ──────────────────────────────────
+// Paginated catalog feeds the ingestion pipeline reads to discover movies to
+// embed. Backfill seeds from `/discover/movie` (popularity-ordered); the
+// incremental mode pulls fresh releases from `/movie/now_playing`.
+
+type DiscoverMovieResponse =
+    paths['/3/discover/movie']['get']['responses']['200']['content']['application/json']
+type NowPlayingResponse =
+    paths['/3/movie/now_playing']['get']['responses']['200']['content']['application/json']
+
+export type MovieListItem = NonNullable<DiscoverMovieResponse['results']>[number]
+
+// Detail call enriched with keywords in a single request (append_to_response).
+// Genres arrive as `{ id, name }[]` here (the list endpoints only give numeric
+// `genre_ids`), and keywords come nested under `keywords.keywords`.
+export type MovieForIngest = MovieDetailsResponse & {
+    keywords?: { keywords?: { id?: number; name?: string }[] }
+}
+
+const cacheList = async <T>(cacheKey: string, fetcher: () => Promise<T>): Promise<T> => {
+    const cachedData = await redis.get(cacheKey)
+    if (cachedData) return JSON.parse(cachedData) as T
+
+    const data = await fetcher()
+    await redis.set(cacheKey, JSON.stringify(data))
+    await redis.expire(cacheKey, TIL_CACHE)
+    return data
+}
+
+export const discoverMoviePage = async (page: number): Promise<MovieListItem[]> => {
+    const data = await cacheList(`discover:popularity:${page}`, () =>
+        fetchFromTMDB<DiscoverMovieResponse>(
+            `/discover/movie?include_adult=false&language=en-US&sort_by=popularity.desc&page=${page}`,
+        ),
+    )
+    return data.results ?? []
+}
+
+export const getNowPlayingPage = async (page: number): Promise<MovieListItem[]> => {
+    const data = await cacheList(`now_playing:${page}`, () =>
+        fetchFromTMDB<NowPlayingResponse>(`/movie/now_playing?language=en-US&page=${page}`),
+    )
+    return data.results ?? []
+}
+
+export const getMovieForIngest = async (movieId: number): Promise<MovieForIngest> =>
+    cacheList(`movie:${movieId}:ingest`, () =>
+        fetchFromTMDB<MovieForIngest>(
+            `/movie/${movieId}?language=en-US&append_to_response=keywords`,
+        ),
+    )

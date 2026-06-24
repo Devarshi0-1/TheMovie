@@ -24,6 +24,7 @@ describe('movies table schema', () => {
                 'keywords',
                 'metadata',
                 'embedding',
+                'source_hash',
                 'created_at',
                 'updated_at',
             ].sort(),
@@ -77,5 +78,15 @@ describe('movies migration (offline; live apply pending env)', () => {
         expect(sql).toContain('CREATE EXTENSION IF NOT EXISTS vector')
         expect(sql).toContain('vector(1536)')
         expect(sql.toLowerCase()).toContain('using hnsw')
+    })
+
+    it('adds the source_hash column for ingestion idempotency (Phase 3.3)', () => {
+        const dir = join(import.meta.dir, '..', '..', 'drizzle')
+        const sql = readdirSync(dir)
+            .filter((f) => f.endsWith('.sql'))
+            .map((f) => readFileSync(join(dir, f), 'utf8'))
+            .join('\n')
+
+        expect(sql).toContain('ADD COLUMN "source_hash" text')
     })
 })

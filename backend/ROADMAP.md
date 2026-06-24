@@ -4,12 +4,14 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 3.3 — ingestion pipeline (`src/jobs/ingest.ts`): fetch TMDB catalog → upsert into `movies` → embed via `src/lib/embeddings.ts` → store vectors. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3.1 pgvector + `embedding` column · ✅ Phase 3.2 embedding service.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 4.1 — intent gate (`src/agent/intent.ts`): a cheap `gpt-5-mini` `generateObject({ schema })` guardrail classifying query relevance/intent before the expensive agent loop. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embedding service + ingestion pipeline.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
 > - [ ] **Phase 2.2 `movies` migration** (`0001`) — apply to a live DB; insert + query a row; confirm the GIN index.
 > - [ ] **Phase 3.1 pgvector migration** (`0002`) — apply to a live DB; confirm the `vector` extension enables and the HNSW index builds.
+> - [ ] **Phase 3.3 `source_hash` migration** (`0003`) — apply to a live DB; confirm the column adds.
+> - [ ] **Phase 3.3 ingestion run** — `bun run ingest --pages=1` against live TMDB + Postgres + `OPENAI_API_KEY`: confirm rows upsert with vectors, a re-run is a no-op (all skipped), and `--incremental` pulls now-playing.
 
 ## 📦 Tech Stack
 
@@ -126,11 +128,11 @@ The data engine behind semantic search. Embeds movie text so the agent can find 
 * [x] **Composes the embedding text** per movie from `title + overview + genres + keywords` (`composeEmbeddingText`) — the fields that capture plot/theme. Normalizes string-or-`{name}` jsonb shapes and de-dupes labels.
 * [x] **Caches embeddings** in Redis keyed by a SHA-256 hash of the source text (`contentHashFor`), namespaced by model; never re-embeds unchanged text. De-dupes identical texts within a batch and embeds only cache misses. _Validated offline with mocked AI SDK + Redis (`src/lib/embeddings.test.ts`); live OpenAI/Redis exercise pending env._
 
-### Milestone 3.3: Ingestion pipeline
-* [ ] **Background job** (`src/jobs/ingest.ts`, runnable via `bun run`): fetch TMDB catalog pages → upsert into `movies` → embed → store vectors.
-* [ ] **Chunk long text** (plots/reviews) with a small splitter util before embedding, where a single field exceeds the model's input window.
-* [ ] **Idempotent upserts** keyed on `tmdb_id`; skip rows whose source text hash is unchanged.
-* [ ] **Backfill + incremental** modes (full catalog seed vs. daily new releases).
+### Milestone 3.3: Ingestion pipeline  _(complete; live run pending env)_
+* [x] **Background job** (`src/jobs/ingest.ts`, runnable via `bun run ingest`): pulls TMDB catalog pages → enriches each movie (detail + keywords in one `append_to_response` call) → upserts into `movies` → embeds via `embedTexts` → stores vectors. Bounded-concurrency enrichment; one failed lookup yields `null` rather than aborting the run. TMDB catalog calls (`discoverMoviePage` / `getNowPlayingPage` / `getMovieForIngest`) live in `src/lib/tmdb.ts`.
+* [x] **Chunk long text** with a `chunkText` splitter (paragraph → sentence → word boundaries); `capForEmbedding` caps composed text to the model's input window before embedding (reviews are the realistic chunk case in Phase 4.5/5.2).
+* [x] **Idempotent upserts** keyed on `tmdb_id` (`onConflictDoUpdate`); persists a `source_hash` column (migration `0003`) and skips rows whose hash is unchanged — no re-embed, no re-write. De-dupes repeated `tmdb_id` within a batch (keeps last).
+* [x] **Backfill + incremental** modes — `--pages`/`--start-page` flags; backfill reads popularity-ordered `/discover/movie`, `--incremental` reads `/movie/now_playing`. _(Idempotency core verified offline with injected deps in `src/jobs/ingest.test.ts`; live TMDB+DB+OpenAI run tracked in the verification-debt list above.)_
 
 ---
 
