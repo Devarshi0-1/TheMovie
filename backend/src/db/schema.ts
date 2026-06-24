@@ -1,4 +1,13 @@
-import { boolean, integer, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core'
+import {
+    boolean,
+    index,
+    integer,
+    jsonb,
+    pgTable,
+    text,
+    timestamp,
+    unique,
+} from 'drizzle-orm/pg-core'
 
 export const user = pgTable('user', {
     id: text('id').primaryKey(),
@@ -81,4 +90,33 @@ export const watchlist = pgTable(
             .$onUpdate(() => new Date()),
     },
     (t) => [unique('unique_user_movie').on(t.userId, t.movieId)],
+)
+
+// Local catalog of movies. TMDB data is persisted here (the self-healing
+// write-back target) and is the substrate for semantic search. The pgvector
+// `embedding` column + HNSW index are added in Phase 3.1 (they require the
+// pgvector extension), and populated by the ingestion pipeline.
+export const movies = pgTable(
+    'movies',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => crypto.randomUUID()),
+        tmdbId: integer('tmdb_id').notNull().unique(),
+        title: text('title').notNull(),
+        overview: text('overview'),
+        posterPath: text('poster_path'),
+        backdropPath: text('backdrop_path'),
+        releaseDate: text('release_date'),
+        genres: jsonb('genres'),
+        keywords: jsonb('keywords'),
+        metadata: jsonb('metadata'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at')
+            .notNull()
+            .defaultNow()
+            .$onUpdate(() => new Date()),
+    },
+    // GIN index on the raw TMDB metadata for fast JSON containment queries.
+    (t) => [index('movies_metadata_gin_idx').using('gin', t.metadata)],
 )
