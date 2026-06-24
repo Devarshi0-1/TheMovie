@@ -4,6 +4,8 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
+> ▸ **Current focus:** Phase 0 — Fix & Cleanup (next up). _Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+
 ## 📦 Tech Stack
 
 The foundation aggressively uses Bun's built-in, high-performance C++ implementations. The **AI layer is a deliberate, scoped exception** to the zero-dependency goal — semantic search and the chat agent require external AI services (OpenAI for both reasoning and embeddings). We stay **Bun-native everywhere else**, and **single-vendor (OpenAI) on the AI side**.
