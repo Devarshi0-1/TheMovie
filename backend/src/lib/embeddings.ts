@@ -30,6 +30,23 @@ const MAX_PARALLEL_CALLS = 4
 const cacheKey = (hash: string) => `${CACHE_NAMESPACE}:${hash}`
 
 /**
+ * The raw embedding call, isolated behind a function type so tests can inject a
+ * fake instead of mocking the shared `ai` module (a global module mock would
+ * leak across test files). Returns vectors in input order plus token usage.
+ */
+export type RawEmbedder = (texts: string[]) => Promise<{ embeddings: number[][]; tokens: number }>
+
+const defaultEmbedder: RawEmbedder = async (texts) => {
+    const { embeddings, usage } = await embedMany({
+        model,
+        values: texts,
+        maxParallelCalls: MAX_PARALLEL_CALLS,
+        maxRetries: MAX_RETRIES,
+    })
+    return { embeddings, tokens: usage.tokens }
+}
+
+/**
  * Stable SHA-256 hex digest of the source text — the cache key and the
  * ingestion idempotency key ("skip rows whose source text hash is unchanged").
  */
@@ -110,7 +127,10 @@ async function readCachedVectors(hashes: string[]): Promise<(number[] | null)[]>
  * misses are sent to OpenAI and then written back. Returns one vector per input
  * text, in input order.
  */
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+export async function embedTexts(
+    texts: string[],
+    embedder: RawEmbedder = defaultEmbedder,
+): Promise<number[][]> {
     if (texts.length === 0) return []
 
     const hashes = texts.map(contentHashFor)
@@ -136,12 +156,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
         assertApiKey()
 
         const missingTexts = missingHashes.map((h) => textByHash.get(h)!)
-        const { embeddings, usage } = await embedMany({
-            model,
-            values: missingTexts,
-            maxParallelCalls: MAX_PARALLEL_CALLS,
-            maxRetries: MAX_RETRIES,
-        })
+        const { embeddings, tokens } = await embedder(missingTexts)
 
         // Validate dimensions before trusting the vectors (a model/config drift
         // would otherwise corrupt the pgvector column at insert time).
@@ -166,7 +181,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
         )
 
         console.log(
-            `🧠 Embedded ${missingTexts.length} text(s) (${usage.tokens} tokens); ` +
+            `🧠 Embedded ${missingTexts.length} text(s) (${tokens} tokens); ` +
                 `${uniqueHashes.length - missingHashes.length} from cache`,
         )
     }
@@ -176,17 +191,23 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 }
 
 /** Embed a single text (cache-aware). Used for query-time embedding. */
-export async function embedText(text: string): Promise<number[]> {
-    const [vector] = await embedTexts([text])
+export async function embedText(text: string, embedder?: RawEmbedder): Promise<number[]> {
+    const [vector] = await embedTexts([text], embedder)
     return vector
 }
 
 /** Compose + embed a batch of movies, returning one vector per movie in order. */
-export async function embedMovies(movies: EmbeddableMovie[]): Promise<number[][]> {
-    return embedTexts(movies.map(composeEmbeddingText))
+export async function embedMovies(
+    movies: EmbeddableMovie[],
+    embedder?: RawEmbedder,
+): Promise<number[][]> {
+    return embedTexts(movies.map(composeEmbeddingText), embedder)
 }
 
 /** Compose + embed a single movie. */
-export async function embedMovie(movie: EmbeddableMovie): Promise<number[]> {
-    return embedText(composeEmbeddingText(movie))
+export async function embedMovie(
+    movie: EmbeddableMovie,
+    embedder?: RawEmbedder,
+): Promise<number[]> {
+    return embedText(composeEmbeddingText(movie), embedder)
 }
