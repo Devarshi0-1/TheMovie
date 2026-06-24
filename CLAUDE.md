@@ -42,7 +42,7 @@ The **backend** deliberately avoids npm packages when Bun ships a native equival
 
 ## How to work on this codebase
 
-1. **Plan before non-trivial changes.** For anything beyond a small/local fix (new endpoints, schema/migrations, the agent, the ingestion pipeline, new UI flows), propose a short plan and get sign-off before implementing. Small, obvious changes — proceed directly and note what you did.
+1. **Plan before non-trivial changes.** For anything beyond a small/local fix (new endpoints, schema/migrations, the agent, the ingestion pipeline, new UI flows), record a short plan (in the branch's PR description) and proceed — operating autonomously, so don't wait for sign-off. Pause only for decisions genuinely the user's call (irreversible infra, spend, product direction). Small, obvious changes — proceed directly and note what you did.
 2. **Drive the roadmap autonomously.** When asked to "continue" or "work on the roadmap," pick the next unchecked item in `backend/ROADMAP.md` (respecting phase order — Phase 0 fixes come first), implement it end-to-end, check it off, and only stop to surface real blockers or decisions that are genuinely the user's call. Keep `ROADMAP.md` checkboxes in sync with reality.
 3. **Every change ships three things.** For any feature *or* fix:
    - **General/feature tests** — the happy path (`bun test` on the backend, **Vitest** on the frontend).
@@ -62,11 +62,13 @@ Treat the **repo as the source of truth, not the context window.** Every durable
 
 **One loop per ROADMAP milestone:**
 1. **Fresh context** — read `CLAUDE.md` + `backend/ROADMAP.md` (start at the `▸ Current focus` pointer), then only the files the item touches.
-2. **Plan** — propose the approach and get sign-off for non-trivial work (see "How to work" #1).
+2. **Plan** — record a short plan in the PR description and proceed (no sign-off wait).
 3. **Build** — on a `feat/` / `fix/` branch; read narrowly; delegate broad searches to subagents.
 4. **Test + verify** — the three test artifacts, `bun test`, confirm behavior.
 5. **Checkpoint** — tick the `ROADMAP.md` boxes, commit, open a PR.
-6. **Reset** — after merge, clear context and start the next milestone clean.
+6. **Self-merge + reset** — once the verify gate passes, self-merge the PR (`gh pr merge --squash --delete-branch`), then clear context and start the next milestone clean.
+
+**Operating mode: autonomous.** There is no human reviewer — *the verify step is the quality gate.* Before self-merging: `bun test` green, the change exercised and observed working, and a self-review of the diff (spawn a reviewer subagent for risky or large changes). Always branch → PR → self-merge (never commit straight to `main`) so every milestone keeps an audit trail and a clean rollback point.
 
 A merged PR is a save point. Once work is committed, prefer **`/clear` at the milestone boundary** over `/compact`; use `/compact` only mid-milestone if context fills before a natural checkpoint.
 
