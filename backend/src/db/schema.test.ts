@@ -23,6 +23,7 @@ describe('movies table schema', () => {
                 'genres',
                 'keywords',
                 'metadata',
+                'embedding',
                 'created_at',
                 'updated_at',
             ].sort(),
@@ -45,6 +46,12 @@ describe('movies table schema', () => {
         const gin = cfg.indexes.find((i) => i.config.name === 'movies_metadata_gin_idx')
         expect(gin).toBeDefined()
     })
+
+    it('has an embedding vector column + HNSW index (feature: semantic kNN)', () => {
+        expect(cfg.columns.find((c) => c.name === 'embedding')).toBeDefined()
+        const hnsw = cfg.indexes.find((i) => i.config.name === 'movies_embedding_hnsw_idx')
+        expect(hnsw).toBeDefined()
+    })
 })
 
 describe('movies migration (offline; live apply pending env)', () => {
@@ -58,5 +65,17 @@ describe('movies migration (offline; live apply pending env)', () => {
         expect(sql).toContain('CREATE TABLE "movies"')
         expect(sql).toContain('UNIQUE("tmdb_id")')
         expect(sql.toLowerCase()).toContain('using gin ("metadata")')
+    })
+
+    it('enables pgvector + adds the embedding column & HNSW index', () => {
+        const dir = join(import.meta.dir, '..', '..', 'drizzle')
+        const sql = readdirSync(dir)
+            .filter((f) => f.endsWith('.sql'))
+            .map((f) => readFileSync(join(dir, f), 'utf8'))
+            .join('\n')
+
+        expect(sql).toContain('CREATE EXTENSION IF NOT EXISTS vector')
+        expect(sql).toContain('vector(1536)')
+        expect(sql.toLowerCase()).toContain('using hnsw')
     })
 })

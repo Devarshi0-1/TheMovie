@@ -4,7 +4,12 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 3 — vector & embedding pipeline (pgvector extension + `embedding` column, OpenAI embedding service, ingestion). _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 data engine + `movies` table.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 3.2 — OpenAI embedding service (`src/lib/embeddings.ts` via the AI SDK `embedMany`), then 3.3 ingestion. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3.1 pgvector + `embedding` column.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+
+> ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
+> - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
+> - [ ] **Phase 2.2 `movies` migration** (`0001`) — apply to a live DB; insert + query a row; confirm the GIN index.
+> - [ ] **Phase 3.1 pgvector migration** (`0002`) — apply to a live DB; confirm the `vector` extension enables and the HNSW index builds.
 
 ## 📦 Tech Stack
 
@@ -104,7 +109,7 @@ Known issues in the current code, to be resolved before building on top.
 ### Milestone 2.2: Database Schema (Drizzle)
 * [x] **`movies` table** (`src/db/schema.ts`): `id`, `tmdb_id` (unique), `title`, `overview`, `poster_path`, `backdrop_path`, `release_date`, `genres`/`keywords`/`metadata` (jsonb), timestamps. Migration `0001_add_movies.sql`. _Live apply pending a reachable Postgres._
 * [x] **GIN index** on `movies.metadata` (`movies_metadata_gin_idx`) for JSON containment queries.
-* [ ] **`embedding` column**: `vector(1536)` on `movies` (pgvector) — deferred to **Phase 3.1** (requires the pgvector extension); populated by the ingestion pipeline.
+* [x] **`embedding` column**: `vector(1536)` on `movies` — added in **Phase 3.1** (migration `0002`); populated by the ingestion pipeline (Phase 3.3).
 
 ---
 
@@ -113,8 +118,8 @@ Known issues in the current code, to be resolved before building on top.
 The data engine behind semantic search. Embeds movie text so the agent can find films by plot/theme rather than keyword.
 
 ### Milestone 3.1: pgvector setup
-* [ ] **Enable pgvector**: `CREATE EXTENSION IF NOT EXISTS vector;` via a Drizzle migration.
-* [ ] **Vector column + index**: add `embedding vector(1536)` to `movies`; create an **HNSW** index with `vector_cosine_ops` for fast cosine kNN.
+* [x] **Enable pgvector**: `CREATE EXTENSION IF NOT EXISTS vector;` prepended to migration `0002_add_embedding.sql`.
+* [x] **Vector column + index**: `embedding vector(1536)` on `movies` + **HNSW** index `movies_embedding_hnsw_idx` with `vector_cosine_ops` (cosine kNN). _Live apply pending a reachable pgvector DB._
 
 ### Milestone 3.2: OpenAI embedding service
 * [ ] **`src/lib/embeddings.ts`**: embed via the AI SDK's `embedMany({ model: openai.textEmbeddingModel('text-embedding-3-small'), values })` (1536-dim), reading `OPENAI_API_KEY`. Batch inputs; handle rate limits and retries explicitly.

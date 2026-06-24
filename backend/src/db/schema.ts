@@ -7,6 +7,7 @@ import {
     text,
     timestamp,
     unique,
+    vector,
 } from 'drizzle-orm/pg-core'
 
 export const user = pgTable('user', {
@@ -93,9 +94,10 @@ export const watchlist = pgTable(
 )
 
 // Local catalog of movies. TMDB data is persisted here (the self-healing
-// write-back target) and is the substrate for semantic search. The pgvector
-// `embedding` column + HNSW index are added in Phase 3.1 (they require the
-// pgvector extension), and populated by the ingestion pipeline.
+// write-back target) and is the substrate for semantic search. The
+// `embedding` column holds the OpenAI `text-embedding-3-small` vector (1536
+// dims), populated by the ingestion pipeline (Phase 3.3) and queried via
+// cosine kNN over the HNSW index.
 export const movies = pgTable(
     'movies',
     {
@@ -111,12 +113,20 @@ export const movies = pgTable(
         genres: jsonb('genres'),
         keywords: jsonb('keywords'),
         metadata: jsonb('metadata'),
+        embedding: vector('embedding', { dimensions: 1536 }),
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at')
             .notNull()
             .defaultNow()
             .$onUpdate(() => new Date()),
     },
-    // GIN index on the raw TMDB metadata for fast JSON containment queries.
-    (t) => [index('movies_metadata_gin_idx').using('gin', t.metadata)],
+    (t) => [
+        // GIN index on the raw TMDB metadata for fast JSON containment queries.
+        index('movies_metadata_gin_idx').using('gin', t.metadata),
+        // HNSW index for cosine-distance kNN over embeddings (semantic search).
+        index('movies_embedding_hnsw_idx').using(
+            'hnsw',
+            t.embedding.op('vector_cosine_ops'),
+        ),
+    ],
 )
