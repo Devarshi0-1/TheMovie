@@ -26,16 +26,20 @@ async function fetchFromTMDB<T>(endpoint: string): Promise<T> {
 }
 
 type TrendingMoviesResponse =
-    paths['/3/trending/all/{time_window}']['get']['responses']['200']['content']['application/json']
+    paths['/3/trending/movie/{time_window}']['get']['responses']['200']['content']['application/json']
 
-export const getTrendingMovies = async () => {
+type TrendingMovies = NonNullable<TrendingMoviesResponse['results']>
+
+// Returns the trending movies array on BOTH cache hit and miss (the cache
+// stores the same `results` array we return, so the shape never differs).
+export const getTrendingMovies = async (): Promise<TrendingMovies> => {
     const cachedKey = 'movies:trending:day'
 
     const cachedData = await redis.get(cachedKey)
 
     if (cachedData) {
         console.log('⚡ HIT: Serving Trending Movies from Redis')
-        return JSON.parse(cachedData) as TrendingMoviesResponse
+        return JSON.parse(cachedData) as TrendingMovies
     }
 
     console.log('🐢 MISS: Fetching from TMDB API')
@@ -44,11 +48,12 @@ export const getTrendingMovies = async () => {
         '/trending/movie/day?language=en-US',
     )
 
-    await redis.set(cachedKey, JSON.stringify(trendingMovies))
+    const results = trendingMovies.results ?? []
 
+    await redis.set(cachedKey, JSON.stringify(results))
     await redis.expire(cachedKey, TIL_CACHE)
 
-    return trendingMovies.results
+    return results
 }
 
 type SearchMovieResponse =
