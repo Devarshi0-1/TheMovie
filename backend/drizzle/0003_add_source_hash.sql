@@ -1,0 +1,1 @@
+ALTER TABLE "movies" ADD COLUMN "source_hash" text;

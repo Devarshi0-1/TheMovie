@@ -114,6 +114,10 @@ export const movies = pgTable(
         keywords: jsonb('keywords'),
         metadata: jsonb('metadata'),
         embedding: vector('embedding', { dimensions: 1536 }),
+        // SHA-256 of the exact text that produced `embedding`. The ingestion
+        // pipeline (Phase 3.3) compares this to skip re-embedding/re-writing
+        // rows whose source text is unchanged (idempotent upserts).
+        sourceHash: text('source_hash'),
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at')
             .notNull()
@@ -124,9 +128,6 @@ export const movies = pgTable(
         // GIN index on the raw TMDB metadata for fast JSON containment queries.
         index('movies_metadata_gin_idx').using('gin', t.metadata),
         // HNSW index for cosine-distance kNN over embeddings (semantic search).
-        index('movies_embedding_hnsw_idx').using(
-            'hnsw',
-            t.embedding.op('vector_cosine_ops'),
-        ),
+        index('movies_embedding_hnsw_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
     ],
 )
