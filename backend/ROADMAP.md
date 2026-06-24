@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 0 — Fix & Cleanup (next up). _Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 2.2 — `movies` table + persistence. _(✅ Phase 0 fixes · ✅ Phase 1 foundation — auth hardening deferred to Phase 6 · ✅ Phase 2.1 TMDB caching.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 ## 📦 Tech Stack
 
@@ -72,11 +72,11 @@ const ok = await Bun.password.verify("supersecret", hash);
 
 Known issues in the current code, to be resolved before building on top.
 
-* [ ] **Fix `getTrendingMovies` return shape** (`src/lib/tmdb.ts`): the cache-hit path returns the full response object while the cache-miss path returns `.results`. Make both return the same shape (prefer `.results`), and cache the same shape you return.
-* [ ] **Reconcile trending endpoint vs. type**: the typed response references `/trending/all/{time_window}` but the fetch hits `/trending/movie/day`. Align the URL and the TS type.
-* [ ] **Remove vestigial `pg` dependency** from `package.json` — the code uses `drizzle-orm/bun-sql`, so `pg`/`@types/pg` contradict the native-driver goal. Verify nothing imports them, then drop.
-* [ ] **Generate the missing `watchlist` migration**: `watchlist` exists in `src/db/schema.ts` but not in the SQL migrations. Run `drizzle-kit generate` and commit the migration.
-* [ ] **Add a real `HealthCheck` endpoint** (`/health`): ping both Postgres and Redis, return per-dependency status. (Roadmap M1.1 originally called for this.)
+* [x] **Fix `getTrendingMovies` return shape** (`src/lib/tmdb.ts`): now returns the `results` array on both cache hit and miss (caches the array, not the wrapper).
+* [x] **Reconcile trending endpoint vs. type**: `TrendingMoviesResponse` retyped to `/3/trending/movie/{time_window}` to match the endpoint actually called.
+* [x] **Remove vestigial `pg` dependency**: dropped `pg` + `@types/pg` from `package.json` (only `drizzle-orm/pg-core` types are used; nothing imports the `pg` package).
+* [x] ~~**Generate the missing `watchlist` migration**~~ — **already present.** `watchlist` is in `0000_majestic_karma.sql` and the snapshot; `drizzle-kit generate` reports no drift. The original analysis was wrong; no migration needed.
+* [x] **Add a real `/health` endpoint**: pings Postgres + Redis with **bounded, parallel probes** (fail-fast → `down` instead of hanging), returns per-dependency status + 200/503. Covered by `src/app.test.ts`.
 
 ---
 
@@ -86,7 +86,7 @@ Known issues in the current code, to be resolved before building on top.
 * [x] **Bun + Hono** initialized with native `Bun.serve()` (`src/index.ts`).
 * [x] **Database (Bun.SQL)**: Drizzle on the `drizzle-orm/bun-sql` adapter (`src/db/index.ts`).
 * [x] **Redis (Bun Native)**: connected via `import { redis } from 'bun'` (`src/lib/redis.ts`).
-* [ ] **Health check** — see Phase 0.
+* [x] **Health check** — `/health` pings Postgres + Redis with per-dependency status (done in Phase 0).
 
 ### Milestone 1.2: Authentication (BetterAuth + Native)
 * [x] **BetterAuth** with Drizzle adapter, email/password (`src/lib/auth.ts`), mounted at `/api/auth/*`.
