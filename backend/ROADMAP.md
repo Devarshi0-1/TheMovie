@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 3.2 — OpenAI embedding service (`src/lib/embeddings.ts` via the AI SDK `embedMany`), then 3.3 ingestion. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3.1 pgvector + `embedding` column.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 3.3 — ingestion pipeline (`src/jobs/ingest.ts`): fetch TMDB catalog → upsert into `movies` → embed via `src/lib/embeddings.ts` → store vectors. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3.1 pgvector + `embedding` column · ✅ Phase 3.2 embedding service.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -121,10 +121,10 @@ The data engine behind semantic search. Embeds movie text so the agent can find 
 * [x] **Enable pgvector**: `CREATE EXTENSION IF NOT EXISTS vector;` prepended to migration `0002_add_embedding.sql`.
 * [x] **Vector column + index**: `embedding vector(1536)` on `movies` + **HNSW** index `movies_embedding_hnsw_idx` with `vector_cosine_ops` (cosine kNN). _Live apply pending a reachable pgvector DB._
 
-### Milestone 3.2: OpenAI embedding service
-* [ ] **`src/lib/embeddings.ts`**: embed via the AI SDK's `embedMany({ model: openai.textEmbeddingModel('text-embedding-3-small'), values })` (1536-dim), reading `OPENAI_API_KEY`. Batch inputs; handle rate limits and retries explicitly.
-* [ ] **Compose the embedding text** per movie from `title + overview + genres + keywords` (the fields that capture plot/theme — what "hero becomes villain" matches against).
-* [ ] **Cache embeddings**: never re-embed unchanged text. Key by a hash of the source text.
+### Milestone 3.2: OpenAI embedding service  _(complete)_
+* [x] **`src/lib/embeddings.ts`**: embeds via the AI SDK's `embedMany({ model: openai.embeddingModel('text-embedding-3-small'), values })` (1536-dim), reading `OPENAI_API_KEY`. Batches inputs; bounds fan-out with `maxParallelCalls` and retries rate limits with `maxRetries`. _(Uses `openai.embeddingModel` — the current API; `textEmbeddingModel` is deprecated in `@ai-sdk/openai` v3.)_
+* [x] **Composes the embedding text** per movie from `title + overview + genres + keywords` (`composeEmbeddingText`) — the fields that capture plot/theme. Normalizes string-or-`{name}` jsonb shapes and de-dupes labels.
+* [x] **Caches embeddings** in Redis keyed by a SHA-256 hash of the source text (`contentHashFor`), namespaced by model; never re-embeds unchanged text. De-dupes identical texts within a batch and embeds only cache misses. _Validated offline with mocked AI SDK + Redis (`src/lib/embeddings.test.ts`); live OpenAI/Redis exercise pending env._
 
 ### Milestone 3.3: Ingestion pipeline
 * [ ] **Background job** (`src/jobs/ingest.ts`, runnable via `bun run`): fetch TMDB catalog pages → upsert into `movies` → embed → store vectors.
