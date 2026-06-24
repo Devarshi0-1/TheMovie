@@ -1,165 +1,225 @@
-# 🎬 TheMovie - Native-First Development Roadmap
+# 🎬 TheMovie — AI-Native Movie Discovery Roadmap
 
-> A Netflix-style movie discovery platform built on **Bun's Native APIs**.
+> A Netflix-style movie platform with a **conversational AI agent** at its core, built on **Bun's native APIs**.
+>
+> Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-## 📦 Tech Stack: The "Zero-Dependency" Approach
+## 📦 Tech Stack
 
-This stack aggressively eliminates external npm packages in favor of Bun's built-in, high-performance C++ implementations.
+The foundation aggressively uses Bun's built-in, high-performance C++ implementations. The **AI layer is a deliberate, scoped exception** to the zero-dependency goal — semantic search and the chat agent require external AI services (OpenAI for both reasoning and embeddings). We stay **Bun-native everywhere else**, and **single-vendor (OpenAI) on the AI side**.
 
-| Layer | Technology | Native Replacement For... |
+| Layer | Technology | Notes |
 | --- | --- | --- |
-| **Runtime** | **Bun** | Node.js, `ts-node`, `nodemon` |
-| **Server** | **Hono** | Express, Fastify (uses native `Request`/`Response`) |
-| **Database** | **Bun.SQL** (PostgreSQL) | `pg`, `postgres.js` |
-| **ORM** | **Drizzle** (`bun-sql` driver) | TypeORM, Prisma (heavy clients) |
-| **Cache** | **Bun Redis** | `ioredis`, `redis` (npm packages) |
-| **Hashing** | **Bun.password** | `bcrypt`, `argon2` |
-| **Testing** | **Bun Test** | `jest`, `vitest` |
-| **Deployment** | **Docker** (`oven/bun`) | Node.js Alpine images |
+| **Runtime** | **Bun** | Replaces Node.js, `ts-node`, `nodemon` |
+| **Server** | **Hono** | Native `Request`/`Response`, `Bun.serve()` |
+| **Database** | **Bun.SQL** (PostgreSQL) | Native C++ driver — no `pg` |
+| **Vector store** | **pgvector** | Embeddings live alongside relational data in Postgres |
+| **ORM** | **Drizzle** (`bun-sql` driver) | Includes `vector` column type for pgvector |
+| **Cache** | **Bun Redis** | Native — no `ioredis`/`redis` |
+| **Hashing** | **Bun.password** | Native Argon2 — no `bcrypt` |
+| **Auth** | **BetterAuth** | Drizzle adapter over Bun.SQL |
+| **Testing** | **Bun Test** | No `jest`/`vitest` |
+| --- AI layer (Vercel AI SDK + OpenAI, single vendor) --- | | |
+| **AI toolkit** | **Vercel AI SDK** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`) | Model calls, tools, structured output, embeddings, streaming |
+| **LLM / Agent** | **OpenAI GPT** via `openai('gpt-5')` | `streamText` + tools + `stopWhen: stepCountIs(...)`; loop hosted in Hono |
+| **Embeddings** | **OpenAI** `text-embedding-3-small` | 1536-dim vectors via the AI SDK's `embed` / `embedMany` |
+| **Chat streaming** | `toUIMessageStreamResponse()` → `useChat` | UI message stream end-to-end |
+| **Deployment** | **Docker** (`oven/bun`) | Alpine image |
 
----
-
-## ⚡️ Bun Native APIs: The "Secret Sauce"
-
-Use these exact patterns to avoid installing unnecessary packages.
-
-```typescript
-// 1. ✅ Native Redis (Zero dependencies)
-// Reads `REDIS_URL` automatically. No 'ioredis' needed.
-import { redis } from "bun";
-
-await redis.set("session:123", "user_data", "EX", 3600);
-const val = await redis.get("session:123");
-
-// 2. ✅ Native SQL (Zero dependencies)
-// Uses Bun's native C++ PostgreSQL driver. No 'pg' needed.
-import { SQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
-
-// Native connection
-const client = new SQL(process.env.DATABASE_URL!);
-// Pass native client to Drizzle
-const db = drizzle({ client });
-
-// 4. ✅ Native Password Hashing
-// Optimized Argon2 implementation. No 'bcrypt' needed.
-const hash = await Bun.password.hash("supersecret");
-const isValid = await Bun.password.verify("supersecret", hash);
+### AI architecture at a glance
 
 ```
+   Chat window          ┌─────────────────────────────────────────────┐
+   (useChat)  ◀───────▶ │  POST /api/v1/chat  (UI message stream)     │
+                        │  Vercel AI SDK agent (streamText + tools)   │
+                        │  intent gate → tiered retrieval → synthesize│
+                        │  model: gpt-5 (via @ai-sdk/openai)          │
+                        └───────────────┬─────────────────────────────┘
+                                        │ the model calls YOUR tools
+            ┌───────────────────────────┼───────────────────────────┐
+            ▼                           ▼                           ▼
+   semantic_search_movies   get_movie_details / trending   manage_watchlist
+   (pgvector cosine kNN      (TMDB service + Redis cache)   (Postgres + Redis)
+    over OpenAI embeddings)
+```
 
-## 🚩 Phase 1: The Native Foundation
+We host the agent loop ourselves in Hono with the **Vercel AI SDK** — `streamText` drives the multi-step tool loop, `@ai-sdk/openai` makes the GPT calls, and the route returns `toUIMessageStreamResponse()` which the frontend consumes via `useChat`. Multi-turn state is persisted as per-user conversation history in Postgres.
+
+---
+
+## ⚡️ Bun Native Patterns (the "secret sauce")
+
+```typescript
+// ✅ Native Redis — reads REDIS_URL automatically. No 'ioredis'.
+import { redis } from "bun";
+await redis.set("session:123", "user_data", "EX", 3600);
+
+// ✅ Native SQL — Bun's C++ PostgreSQL driver. No 'pg'.
+import { SQL } from "bun";
+import { drizzle } from "drizzle-orm/bun-sql";
+const db = drizzle({ client: new SQL(process.env.DATABASE_URL!) });
+
+// ✅ Native password hashing — Argon2. No 'bcrypt'.
+const hash = await Bun.password.hash("supersecret");
+const ok = await Bun.password.verify("supersecret", hash);
+```
+
+---
+
+## 🚩 Phase 0: Fix & Cleanup (do first)
+
+Known issues in the current code, to be resolved before building on top.
+
+* [ ] **Fix `getTrendingMovies` return shape** (`src/lib/tmdb.ts`): the cache-hit path returns the full response object while the cache-miss path returns `.results`. Make both return the same shape (prefer `.results`), and cache the same shape you return.
+* [ ] **Reconcile trending endpoint vs. type**: the typed response references `/trending/all/{time_window}` but the fetch hits `/trending/movie/day`. Align the URL and the TS type.
+* [ ] **Remove vestigial `pg` dependency** from `package.json` — the code uses `drizzle-orm/bun-sql`, so `pg`/`@types/pg` contradict the native-driver goal. Verify nothing imports them, then drop.
+* [ ] **Generate the missing `watchlist` migration**: `watchlist` exists in `src/db/schema.ts` but not in the SQL migrations. Run `drizzle-kit generate` and commit the migration.
+* [ ] **Add a real `HealthCheck` endpoint** (`/health`): ping both Postgres and Redis, return per-dependency status. (Roadmap M1.1 originally called for this.)
+
+---
+
+## 🚩 Phase 1: The Native Foundation  _(mostly complete)_
 
 ### Milestone 1.1: Core Infrastructure
-
-* [ ] **Initialize Bun**: `bun init` (Built-in TypeScript support, no `tsc` config needed).
-* [ ] **Setup Hono**: Initialize Hono with strict mode.
-* *Note:* Hono uses Bun's native `Bun.serve()` under the hood.
-
-
-* [ ] **Setup Database (Bun.SQL)**:
-* Configure `drizzle-orm` with the `drizzle-orm/bun-sql` adapter.
-* *Goal:* Ensure Drizzle is using the **native** client, not the Node.js `postgres` package.
-
-
-* [ ] **Setup Redis (Bun Native)**:
-* Verify connection using `import { redis } from 'bun'`.
-* Implement a simple `HealthCheck` endpoint that pings both DB and Redis.
-
-
+* [x] **Bun + Hono** initialized with native `Bun.serve()` (`src/index.ts`).
+* [x] **Database (Bun.SQL)**: Drizzle on the `drizzle-orm/bun-sql` adapter (`src/db/index.ts`).
+* [x] **Redis (Bun Native)**: connected via `import { redis } from 'bun'` (`src/lib/redis.ts`).
+* [ ] **Health check** — see Phase 0.
 
 ### Milestone 1.2: Authentication (BetterAuth + Native)
-
-* [ ] **Configure BetterAuth**:
-* Use Drizzle adapter (connected via Bun.SQL).
-* *Optimization:* If BetterAuth allows custom hashers, inject `Bun.password` for maximum speed.
-
-
-* [ ] **Session Management**:
-* Store sessions in Redis (Native).
-* Set TTLs using Redis `EX` (Expire) command.
-
-
+* [x] **BetterAuth** with Drizzle adapter, email/password (`src/lib/auth.ts`), mounted at `/api/auth/*`.
+* [x] **Session check** endpoint `/api/me`.
+* [ ] **Harden auth before production** (see Phase 6): raise `minPasswordLength`, re-enable origin checks, consider Redis-backed session storage with TTLs.
 
 ---
 
-## 🚩 Phase 2: Movie Data Engine (TMDB)
+## 🚩 Phase 2: Movie Data Engine & Persistence
 
-### Milestone 2.1: Native Fetching & Caching
-
-* [ ] **TMDB Service**:
-* Use `fetch()` (Bun native implementation) for all upstream requests.
-
-
-* [ ] **The "Stale-While-Revalidate" Pattern**:
-* **Check**: `await redis.get(\`movie:${id}`)`
-* **Miss**: Fetch TMDB -> `await redis.set(...)` -> Return data.
-* **Hit**: Return Redis data immediately.
-
-
+### Milestone 2.1: TMDB Fetching & Caching  _(complete)_
+* [x] **TMDB service** using native `fetch` (`src/lib/tmdb.ts`).
+* [x] **Stale-while-revalidate** caching in Redis for trending / search / details (1h TTL).
 
 ### Milestone 2.2: Database Schema (Drizzle)
-
-* [ ] **Define Schema**: Consolidate into one migration.
-* `movies`: id, tmdb_id, title, poster, backdrop, metadata (jsonb).
-* `users`: id, email, password_hash, role.
-* `watchlists`: user_id, movie_id, added_at.
-
-
-* [ ] **Indexing**: Add GIN index on `movies.metadata` for JSON search performance.
+* [ ] **`movies` table**: `id`, `tmdb_id` (unique), `title`, `overview`, `poster_path`, `backdrop_path`, `release_date`, `genres` (jsonb), `keywords` (jsonb), `metadata` (jsonb).
+* [ ] **GIN index** on `movies.metadata` for JSON search performance.
+* [ ] **`embedding` column**: `vector(1536)` on `movies` (pgvector) — populated by the ingestion pipeline (Phase 3).
 
 ---
 
-## 🚩 Phase 3: High-Performance User Features
+## 🚩 Phase 3: Vector & Embedding Pipeline
 
-### Milestone 3.1: Watchlist & Social
+The data engine behind semantic search. Embeds movie text so the agent can find films by plot/theme rather than keyword.
 
-* [ ] **Atomic Operations**:
-* Use Redis Sets (`SADD`, `SREM`, `SISMEMBER`) for "Is this movie in my watchlist?" checks. This is O(1) and faster than SQL.
-* Sync Redis sets to Postgres `watchlists` table via background job (write-behind) or dual-write.
+### Milestone 3.1: pgvector setup
+* [ ] **Enable pgvector**: `CREATE EXTENSION IF NOT EXISTS vector;` via a Drizzle migration.
+* [ ] **Vector column + index**: add `embedding vector(1536)` to `movies`; create an **HNSW** index with `vector_cosine_ops` for fast cosine kNN.
 
+### Milestone 3.2: OpenAI embedding service
+* [ ] **`src/lib/embeddings.ts`**: embed via the AI SDK's `embedMany({ model: openai.textEmbeddingModel('text-embedding-3-small'), values })` (1536-dim), reading `OPENAI_API_KEY`. Batch inputs; handle rate limits and retries explicitly.
+* [ ] **Compose the embedding text** per movie from `title + overview + genres + keywords` (the fields that capture plot/theme — what "hero becomes villain" matches against).
+* [ ] **Cache embeddings**: never re-embed unchanged text. Key by a hash of the source text.
 
-* [ ] **User Reviews**:
-* Store reviews in Postgres.
-* Cache "Recent Reviews" for a movie in a Redis List (`LPUSH`, `LTRIM`).
-
-
-
----
-
-## 🚩 Phase 4: Recommendation Engine (Hybrid)
-
-### Milestone 4.1: Vector-ish Similarity
-
-* [ ] **Related Movies**:
-* Store "Similar Movies" (from TMDB) in Redis JSON or simple string arrays.
-
-
-* [ ] **Personalized Feed**:
-* **Query**: "Get movies from genres X, Y that user hasn't seen."
-* **Optimization**: Use `Bun.SQL` raw queries for complex joins if Drizzle is too slow.
-
-
+### Milestone 3.3: Ingestion pipeline
+* [ ] **Background job** (`src/jobs/ingest.ts`, runnable via `bun run`): fetch TMDB catalog pages → upsert into `movies` → embed → store vectors.
+* [ ] **Chunk long text** (plots/reviews) with a small splitter util before embedding, where a single field exceeds the model's input window.
+* [ ] **Idempotent upserts** keyed on `tmdb_id`; skip rows whose source text hash is unchanged.
+* [ ] **Backfill + incremental** modes (full catalog seed vs. daily new releases).
 
 ---
 
-## 🚩 Phase 5: Production Hardening
+## 🚩 Phase 4: AI Chat Agent & RAG  _(headline feature)_
 
-### Milestone 5.1: Native Security
+The conversational window: natural-language movie discovery powered by a **Vercel AI SDK** agent (`streamText` + tools) over GPT + the vector store. The full pipeline (intent gate → tiered retrieval → synthesis) is specified in `CLAUDE.md` → "The chat agent: query-handling pipeline".
 
-* [ ] **Rate Limiting**:
-* Implement a slide-window rate limiter using Redis `INCR` and `EXPIRE`.
-* *Why?* Native Redis is faster than any JS-based middleware.
+### Milestone 4.1: Intent gate (guardrail)
+* [ ] **`src/agent/intent.ts`**: a cheap **`gpt-5-mini`** `generateObject({ schema })` call (shared **Zod** schema) returning `{ relevant, intent, ... }`.
+* [ ] **Block** off-topic, abusive, and prompt-injection queries **before** the expensive `gpt-5` loop runs (safety + cost control). Return a friendly refusal for blocked queries.
 
+### Milestone 4.2: Retrieval tools (tiered)
+* [ ] **`search_movies_sql`**: structured/exact lookups (title, genre, year) against Postgres. Cheapest, most precise — the agent's first choice for concrete queries.
+* [ ] **`semantic_search_movies`**: embed the query (OpenAI) → cosine kNN against `movies.embedding` (pgvector, via Drizzle) → top matches. Answers conceptual queries like *"hero later becomes the villain."*
+* [ ] **`fetch_from_tmdb`**: last-resort lookup on a local-catalog miss; on a hit, **write back** (upsert + embed) so the catalog self-heals.
+* [ ] **`get_movie_details`** / **`get_trending`** / **`manage_watchlist`** / **`get_user_watchlist`**: wrap existing services / Phase 5 user features.
+* [ ] Define every tool with the AI SDK's **`tool({ inputSchema, execute })`** using **Zod** schemas, and write **prescriptive descriptions** stating *when* to call each (prefer cheapest sufficient tier; escalate only on insufficient results).
 
-* [ ] **Secure Headers**: Use Hono's `secureHeaders` middleware.
+### Milestone 4.3: Agent loop + streaming
+* [ ] **`src/agent/agent.ts`**: a **`streamText`** agent — `model: openai('gpt-5')`, the retrieval tools, and a multi-step loop via `stopWhen: stepCountIs(...)`. The system prompt encodes cheapest-sufficient-first escalation; the pipeline (intent gate → tool-driven retrieval → synthesis) is plain TS control flow.
+* [ ] **`POST /api/v1/chat`** (authenticated): return `result.toUIMessageStreamResponse()` directly from Hono so the frontend `useChat` renders tokens + tool activity live. Validate the request body with a shared **Zod** schema.
+* [ ] **Log the retrieval path(s) taken** per request (sql / semantic / tmdb) alongside token usage (`usage`) for observability.
 
-### Milestone 5.2: DevOps
+### Milestone 4.4: State, memory & confirmation
+* [ ] **Conversation memory**: persist per-user chat turns in Postgres — load prior messages on each request, append new turns via `streamText`'s `onFinish` — so multi-turn context ("the sci-fi one we discussed") works and conversations resume.
+* [ ] **Human-in-the-loop confirmation**: gate chat-driven mutations (e.g. watchlist edits) on client approval via the AI SDK tool-confirmation pattern (`useChat` + `addToolResult`) before committing.
 
-* [ ] **Docker Image**:
-* Use `FROM oven/bun:1-alpine` (Smallest, fastest).
-* Command: `CMD ["bun", "run", "src/index.ts"]`.
+### Milestone 4.5: Review & synopsis summarization
+* [ ] **Spoiler-free summaries**: GPT summarizes TMDB reviews into pros/cons + a one-line "vibe" per movie. Cache the summary in Redis keyed by `movie:{id}:summary`.
+* [ ] Use a **cheaper model (`gpt-5-mini`)** for this bounded summarization task to control cost (see CLAUDE.md cost rules).
 
+---
 
-* [ ] **CI/CD**:
-* Run tests with `bun test` (Instant startup).
+## 🚩 Phase 5: High-Performance User Features
+
+### Milestone 5.1: Watchlist
+* [ ] **CRUD endpoints** for `watchlist` (`src/routes/watchlist.ts`): add/remove/list, authenticated, respecting the existing `unique_user_movie` constraint.
+* [ ] **O(1) membership** via Redis Sets (`SADD`/`SREM`/`SISMEMBER`) for "is this in my watchlist?"; sync to Postgres (dual-write or write-behind).
+* [ ] **Conversational watchlist**: wire the `manage_watchlist` agent tool (Phase 4.1) to these endpoints so users can add/remove via chat.
+
+### Milestone 5.2: Reviews & Personalized Recs
+* [ ] **User reviews** stored in Postgres; cache "recent reviews" per movie in a Redis List (`LPUSH`/`LTRIM`).
+* [ ] **Personalized AI recommendations** ("because you watched X"): a dedicated step that combines the user's watchlist with **vector similarity** (kNN from watched movies' embeddings) to assemble candidates, then has the agent (`generateText`/`generateObject`) rank and explain the picks.
+
+---
+
+## 🚩 Phase 6: Production Hardening
+
+### Milestone 6.1: Security & limits
+* [ ] **Rate limiting**: sliding-window limiter using Redis `INCR` + `EXPIRE`. Apply tighter limits to the AI chat endpoint (it's the expensive one).
+* [ ] **Secure headers**: Hono `secureHeaders` middleware.
+* [ ] **Auth hardening**: raise `minPasswordLength`, re-enable origin checks, review CORS.
+* [ ] **Validate inputs** at every API boundary (chat prompts, search queries, watchlist mutations).
+
+### Milestone 6.2: AI cost & observability
+* [ ] **Prompt caching**: keep the agent's stable system prompt + tool definitions at the start of the prompt so OpenAI's automatic prompt caching applies.
+* [ ] **Token/usage logging** per request (input/output/cache tokens) for cost tracking.
+* [ ] **Embedding cost control**: confirm no redundant re-embedding; monitor ingestion spend.
+
+### Milestone 6.3: DevOps
+* [ ] **Docker image** `FROM oven/bun:1-alpine`, `CMD ["bun", "run", "src/index.ts"]`.
+* [ ] **CI/CD**: run backend `bun test` + frontend `vitest` + `oxlint` + `tsgo` type-check on every PR; block merge on failure.
+
+---
+
+## 🚩 Phase 7: Frontend (TanStack Start + React 19)
+
+Lives in `frontend/`. Shares Zod schemas with the backend via `packages/schemas/`.
+
+### Milestone 7.1: Scaffold
+* [ ] **Vite+ workspace** with **oxlint** (lint), **oxfmt** (format), **Vitest** (test), **tsgo v7** (type-check). Pin versions.
+* [ ] **TanStack Start + React 19** app; file-based **TanStack Router** (ships with Start); **TanStack Query** for server state.
+* [ ] **`packages/schemas/`**: shared Zod schemas consumed by both backend and frontend.
+
+### Milestone 7.2: Core screens
+* [ ] **Auth UI** (sign-up / sign-in) against BetterAuth; session-aware routing.
+* [ ] **Discovery**: trending grid + search, backed by TanStack Query against the movie endpoints.
+* [ ] **Movie detail**: details + spoiler-free AI summary; add/remove from watchlist.
+* [ ] **Watchlist** screen.
+
+### Milestone 7.3: Chat window  _(headline UX)_
+* [ ] **Conversational chat UI** built on the AI SDK's **`useChat`** (`@ai-sdk/react`) against `POST /api/v1/chat` — streams tokens live, renders tool/retrieval activity, and supports stop/regenerate.
+* [ ] **Tool confirmation UI** for chat-driven watchlist mutations (approve/deny → `addToolResult`).
+* [ ] **Forms validated with TanStack Form + Zod** (shared schemas). Handle blocked/irrelevant queries gracefully (the intent-gate refusal).
+
+> Every frontend change ships feature tests + edge-case tests (Vitest) + a UX overview, per `CLAUDE.md`.
+
+---
+
+## Environment variables
+
+```
+DATABASE_URL=          # Postgres (pgvector-enabled)
+REDIS_URL=             # Bun Redis
+FRONTEND_URL=          # CORS origin
+TMDB_READ_ACCESS_API_KEY=
+OPENAI_API_KEY=        # GPT agent/summarization + text-embedding-3-small (single AI vendor)
+BETTER_AUTH_SECRET=
+```
