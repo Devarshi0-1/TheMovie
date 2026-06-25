@@ -4,6 +4,8 @@ import {
     assistantTextMessage,
     lastUserMessage,
     latestUserText,
+    MAX_STEPS,
+    prepareAgentStep,
     summarizeToolPaths,
     textOfMessage,
 } from './agent'
@@ -89,5 +91,19 @@ describe('summarizeToolPaths', () => {
 
     it('returns [] when no tools were called (edge: answered directly)', () => {
         expect(summarizeToolPaths([{ toolCalls: [] }, {}])).toEqual([])
+    })
+})
+
+describe('prepareAgentStep (forced synthesis on the final step)', () => {
+    it('leaves tool choice to the model on early steps (feature)', () => {
+        expect(prepareAgentStep({ stepNumber: 0 })).toEqual({})
+        expect(prepareAgentStep({ stepNumber: MAX_STEPS - 2 })).toEqual({})
+    })
+
+    it('disables tools on the final step so the model must answer (regression)', () => {
+        // Without this, a query that escalates to many fetch_from_tmdb calls can
+        // burn the whole step budget on tool calls and stream an empty answer.
+        expect(prepareAgentStep({ stepNumber: MAX_STEPS - 1 })).toEqual({ toolChoice: 'none' })
+        expect(prepareAgentStep({ stepNumber: MAX_STEPS })).toEqual({ toolChoice: 'none' })
     })
 })

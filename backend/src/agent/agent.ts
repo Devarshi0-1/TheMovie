@@ -15,8 +15,20 @@ import { createUserTools } from './userTools'
 export const AGENT_MODEL = 'gpt-5'
 
 // Cap the tool loop so a misbehaving model can't run unboundedly. A typical
-// query resolves in 1–3 steps (retrieve → maybe escalate → synthesize).
-const MAX_STEPS = 8
+// query resolves in 1–3 steps (retrieve → maybe escalate → synthesize); the
+// ceiling leaves room for a query that has to escalate to several TMDB fetches.
+export const MAX_STEPS = 10
+
+/**
+ * Per-step settings for the agent loop. On the final allowed step we disable
+ * tools (`toolChoice: 'none'`) so the model MUST emit a text answer instead of
+ * ending on another tool call — otherwise a query that escalates to many
+ * fetch_from_tmdb calls can exhaust the step budget mid-tool-call and stream an
+ * empty response. Earlier steps inherit the outer (auto) tool choice.
+ */
+export function prepareAgentStep({ stepNumber }: { stepNumber: number }) {
+    return stepNumber >= MAX_STEPS - 1 ? { toolChoice: 'none' as const } : {}
+}
 
 // Stable system prompt kept first so OpenAI prompt caching covers it + the tool
 // definitions; only the per-request messages (appended after) are volatile.
@@ -102,6 +114,7 @@ export async function runAgent(messages: UIMessage[], opts: { userId?: string } 
         messages: modelMessages,
         tools,
         stopWhen: stepCountIs(MAX_STEPS),
+        prepareStep: prepareAgentStep,
         onFinish: ({ steps, totalUsage }) => logChatFinish(steps, totalUsage),
     })
 }

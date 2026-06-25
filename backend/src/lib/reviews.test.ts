@@ -13,7 +13,7 @@ const entry = (id: string, movieId = 5): ReviewEntry => ({
 
 const fakeDeps = (over: Partial<ReviewDeps> = {}) => {
     const recent = new Map<number, ReviewEntry[]>()
-    const calls = { upsert: 0, push: 0, hydrate: 0, dbList: 0 }
+    const calls = { upsert: 0, invalidate: 0, hydrate: 0, dbList: 0 }
     const deps: ReviewDeps = {
         async dbUpsert(_userId, input) {
             calls.upsert++
@@ -23,9 +23,9 @@ const fakeDeps = (over: Partial<ReviewDeps> = {}) => {
             calls.dbList++
             return [entry('a', movieId), entry('b', movieId)]
         },
-        async cachePushRecent(movieId, e) {
-            calls.push++
-            recent.set(movieId, [e, ...(recent.get(movieId) ?? [])])
+        async cacheInvalidateRecent(movieId) {
+            calls.invalidate++
+            recent.delete(movieId)
         },
         async cacheGetRecent(movieId) {
             return recent.get(movieId) ?? null
@@ -40,13 +40,23 @@ const fakeDeps = (over: Partial<ReviewDeps> = {}) => {
 }
 
 describe('upsertReview', () => {
-    it('stores the review and pushes it onto the recent cache (feature)', async () => {
-        const { deps, calls, recent } = fakeDeps()
+    it('stores the review and invalidates the recent cache (feature)', async () => {
+        const { deps, calls } = fakeDeps()
         const out = await upsertReview('u1', { movieId: 5, content: 'great', rating: 9 }, deps)
         expect(out.id).toBe('new')
         expect(calls.upsert).toBe(1)
-        expect(calls.push).toBe(1)
-        expect(recent.get(5)).toHaveLength(1)
+        expect(calls.invalidate).toBe(1)
+    })
+
+    it('editing a review does not leave a stale duplicate in the listing (regression)', async () => {
+        // A warm cache holds the pre-edit review; upserting must invalidate it so
+        // the next read re-hydrates from Postgres (one row per user/movie) rather
+        // than serving both the old and new copy.
+        const { deps, recent, calls } = fakeDeps()
+        recent.set(5, [{ ...entry('r1'), rating: 9, content: 'first take' }])
+        await upsertReview('u1', { movieId: 5, content: 'edited take', rating: 8 }, deps)
+        expect(calls.invalidate).toBe(1)
+        expect(recent.has(5)).toBe(false) // cache dropped; next read hydrates fresh
     })
 })
 

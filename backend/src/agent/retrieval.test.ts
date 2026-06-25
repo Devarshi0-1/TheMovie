@@ -155,6 +155,22 @@ describe('fetchFromTmdb', () => {
         expect(fetchFromTmdb({ limit: 3 }, deps)).rejects.toThrow(/query or a tmdbId/)
     })
 
+    it('uses the query path when tmdbId is a 0 placeholder (regression)', async () => {
+        // gpt-5 frequently fills the optional `tmdbId` with `0` alongside a real
+        // query. `0` must NOT be treated as a real id (fetching movie id 0 is a
+        // 404); the query path must win.
+        const { deps, calls } = fakeDeps({ tmdbSearchIds: async () => [41428] })
+        const out = await fetchFromTmdb({ query: 'Tetsuo: The Iron Man', tmdbId: 0, limit: 3 }, deps)
+        // tmdbDetail is reached via the search path with the searched id, never 0.
+        expect(calls.tmdbDetail).toEqual([41428])
+        expect(out).toHaveLength(1)
+    })
+
+    it('throws when tmdbId is 0 and no query is given (edge)', async () => {
+        const { deps } = fakeDeps()
+        expect(fetchFromTmdb({ tmdbId: 0, limit: 3 }, deps)).rejects.toThrow(/query or a tmdbId/)
+    })
+
     it('still returns results when write-back fails (edge: best-effort)', async () => {
         const { deps } = fakeDeps({
             writeBack: async () => {
