@@ -1,10 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
-import type { RawEmbedder } from './embeddings'
+import { beforeEach, describe, expect, it } from 'bun:test'
+import {
+    composeEmbeddingText,
+    contentHashFor,
+    embedMovie,
+    embedMovies,
+    embedText,
+    embedTexts,
+    EMBEDDING_DIMENSIONS,
+    type EmbeddingCache,
+    type RawEmbedder,
+} from './embeddings'
 
 // The embedding service must be testable offline: no real OpenAI key, no live
-// Redis. We inject a fake embedder (so the shared `ai` module is never mocked —
-// a global module mock would leak across test files) and mock the local redis
-// re-export. Both record calls so we can assert cache behavior + cost control.
+// Redis. We inject a fake embedder AND a fake cache (so neither the shared `ai`
+// module nor `./redis` is ever module-mocked — a global module mock would leak
+// across test files). Both record calls so we can assert cache behavior + cost.
 
 let embedderCalls: string[][] = []
 // Deterministic fake vector for a text: 1536 dims so dimension validation passes.
@@ -20,39 +30,24 @@ const fakeEmbedder: RawEmbedder = async (texts) => {
     }
 }
 
-// In-memory Redis stand-in with the subset of the API the service uses.
+// In-memory cache stand-in.
 const store = new Map<string, string>()
 let setCalls = 0
-mock.module('./redis', () => ({
-    redis: {
-        get: async (key: string) => store.get(key) ?? null,
-        set: async (key: string, value: string) => {
-            setCalls++
-            store.set(key, value)
-            return 'OK'
-        },
+const fakeCache: EmbeddingCache = {
+    async get(key) {
+        return store.get(key) ?? null
     },
-}))
-
-const {
-    composeEmbeddingText,
-    contentHashFor,
-    embedTexts,
-    embedText,
-    embedMovie,
-    embedMovies,
-    EMBEDDING_DIMENSIONS,
-} = await import('./embeddings')
+    async set(key, value) {
+        setCalls++
+        store.set(key, value)
+    },
+}
 
 beforeEach(() => {
     embedderCalls = []
     setCalls = 0
     store.clear()
     process.env.OPENAI_API_KEY = 'test-key'
-})
-
-afterEach(() => {
-    mock.restore()
 })
 
 // ── composeEmbeddingText ─────────────────────────────────────────────────────
@@ -100,7 +95,7 @@ describe('contentHashFor', () => {
 // ── embedTexts: core cache + batching behavior ───────────────────────────────
 describe('embedTexts', () => {
     it('returns a 1536-dim vector per input in order (feature)', async () => {
-        const out = await embedTexts(['a', 'bb'], fakeEmbedder)
+        const out = await embedTexts(['a', 'bb'], fakeEmbedder, fakeCache)
         expect(out).toHaveLength(2)
         expect(out[0]).toHaveLength(EMBEDDING_DIMENSIONS)
         expect(out[0]).toEqual(fakeVector('a'))
@@ -108,33 +103,33 @@ describe('embedTexts', () => {
     })
 
     it('returns [] for empty input without embedding (edge)', async () => {
-        const out = await embedTexts([], fakeEmbedder)
+        const out = await embedTexts([], fakeEmbedder, fakeCache)
         expect(out).toEqual([])
         expect(embedderCalls).toHaveLength(0)
     })
 
     it('writes embeddings to the cache on a miss (feature: cost control)', async () => {
-        await embedTexts(['fresh'], fakeEmbedder)
+        await embedTexts(['fresh'], fakeEmbedder, fakeCache)
         expect(embedderCalls).toHaveLength(1)
         expect(setCalls).toBe(1)
     })
 
     it('never re-embeds cached text (feature: the headline cost rule)', async () => {
-        await embedTexts(['cached'], fakeEmbedder)
+        await embedTexts(['cached'], fakeEmbedder, fakeCache)
         embedderCalls = []
         setCalls = 0
 
-        const out = await embedTexts(['cached'], fakeEmbedder)
+        const out = await embedTexts(['cached'], fakeEmbedder, fakeCache)
         expect(embedderCalls).toHaveLength(0) // served entirely from cache
         expect(setCalls).toBe(0)
         expect(out[0]).toEqual(fakeVector('cached'))
     })
 
     it('only embeds the missing subset of a mixed batch (feature)', async () => {
-        await embedTexts(['known'], fakeEmbedder)
+        await embedTexts(['known'], fakeEmbedder, fakeCache)
         embedderCalls = []
 
-        const out = await embedTexts(['known', 'new'], fakeEmbedder)
+        const out = await embedTexts(['known', 'new'], fakeEmbedder, fakeCache)
         expect(embedderCalls).toHaveLength(1)
         expect(embedderCalls[0]).toEqual(['new']) // 'known' came from cache
         expect(out[0]).toEqual(fakeVector('known'))
@@ -142,7 +137,7 @@ describe('embedTexts', () => {
     })
 
     it('de-dupes identical texts within one batch (edge: embed once)', async () => {
-        const out = await embedTexts(['dup', 'dup', 'dup'], fakeEmbedder)
+        const out = await embedTexts(['dup', 'dup', 'dup'], fakeEmbedder, fakeCache)
         expect(embedderCalls).toHaveLength(1)
         expect(embedderCalls[0]).toEqual(['dup']) // embedded a single time
         expect(out[0]).toEqual(out[1])
@@ -151,13 +146,13 @@ describe('embedTexts', () => {
 
     it('throws a clear error when the API key is missing on a miss (edge: config)', async () => {
         delete process.env.OPENAI_API_KEY
-        expect(embedTexts(['needs-key'], fakeEmbedder)).rejects.toThrow(/OPENAI_API_KEY/)
+        expect(embedTexts(['needs-key'], fakeEmbedder, fakeCache)).rejects.toThrow(/OPENAI_API_KEY/)
     })
 
     it('serves fully-cached batches without needing an API key (edge)', async () => {
-        await embedTexts(['warm'], fakeEmbedder)
+        await embedTexts(['warm'], fakeEmbedder, fakeCache)
         delete process.env.OPENAI_API_KEY
-        const out = await embedTexts(['warm'], fakeEmbedder)
+        const out = await embedTexts(['warm'], fakeEmbedder, fakeCache)
         expect(out[0]).toEqual(fakeVector('warm'))
     })
 })
@@ -165,7 +160,7 @@ describe('embedTexts', () => {
 // ── Movie/single helpers ─────────────────────────────────────────────────────
 describe('embedMovie / embedMovies / embedText', () => {
     it('embedText returns a single vector (feature)', async () => {
-        const v = await embedText('solo', fakeEmbedder)
+        const v = await embedText('solo', fakeEmbedder, fakeCache)
         expect(v).toEqual(fakeVector('solo'))
     })
 
@@ -173,13 +168,14 @@ describe('embedMovie / embedMovies / embedText', () => {
         const v = await embedMovie(
             { title: 'Solaris', overview: 'A space station drama.' },
             fakeEmbedder,
+            fakeCache,
         )
         expect(v).toHaveLength(EMBEDDING_DIMENSIONS)
         expect(embedderCalls[0][0]).toContain('Title: Solaris')
     })
 
     it('embedMovies returns one vector per movie in order (feature)', async () => {
-        const out = await embedMovies([{ title: 'A' }, { title: 'B' }], fakeEmbedder)
+        const out = await embedMovies([{ title: 'A' }, { title: 'B' }], fakeEmbedder, fakeCache)
         expect(out).toHaveLength(2)
         expect(embedderCalls[0]).toEqual(['Title: A', 'Title: B'])
     })

@@ -1,20 +1,17 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { getTrendingMovies, searchMovie, type TmdbCache } from './tmdb'
 
-// Mock the cache (safe local module) and stub global fetch — no 'bun' module
-// mock, so nothing leaks to other test files.
+// Inject a fake cache (no './redis' module mock — that would leak across test
+// files) and stub global fetch for the network. Both are reset per test.
 const store = new Map<string, string>()
-mock.module('./redis', () => ({
-    redis: {
-        get: async (key: string) => store.get(key) ?? null,
-        set: async (key: string, value: string) => {
-            store.set(key, value)
-            return 'OK'
-        },
-        expire: async () => 1,
+const fakeCache: TmdbCache = {
+    async get(key) {
+        return store.get(key) ?? null
     },
-}))
-
-const { searchMovie, getTrendingMovies } = await import('./tmdb')
+    async set(key, value) {
+        store.set(key, value)
+    },
+}
 
 const originalFetch = globalThis.fetch
 let fetchCalls = 0
@@ -52,7 +49,7 @@ describe('searchMovie shape consistency', () => {
 
     it('returns the results array on a cache MISS (feature)', async () => {
         stubFetch(response)
-        const out = await searchMovie('dune')
+        const out = await searchMovie('dune', fakeCache)
         expect(Array.isArray(out)).toBe(true)
         expect(out.map((m) => m.id)).toEqual([1, 2])
         expect(fetchCalls).toBe(1)
@@ -60,16 +57,16 @@ describe('searchMovie shape consistency', () => {
 
     it('returns the same array shape on a cache HIT, without refetching (regression)', async () => {
         stubFetch(response)
-        await searchMovie('dune') // populates cache
-        const cached = await searchMovie('dune') // served from cache
-        expect(Array.isArray(cached)).toBe(true)
-        expect(cached.map((m) => m.id)).toEqual([1, 2])
+        await searchMovie('dune', fakeCache) // populates cache
+        const cachedResult = await searchMovie('dune', fakeCache) // served from cache
+        expect(Array.isArray(cachedResult)).toBe(true)
+        expect(cachedResult.map((m) => m.id)).toEqual([1, 2])
         expect(fetchCalls).toBe(1) // second call hit the cache, no extra fetch
     })
 
     it('returns [] when TMDB yields no results array (edge)', async () => {
         stubFetch({ page: 1, total_pages: 0, total_results: 0 })
-        const out = await searchMovie('nonexistent film xyz')
+        const out = await searchMovie('nonexistent film xyz', fakeCache)
         expect(out).toEqual([])
     })
 })
@@ -77,8 +74,8 @@ describe('searchMovie shape consistency', () => {
 describe('getTrendingMovies', () => {
     it('returns the results array on both miss and hit (feature)', async () => {
         stubFetch({ page: 1, results: [{ id: 9, title: 'Trending' }] })
-        const miss = await getTrendingMovies()
-        const hit = await getTrendingMovies()
+        const miss = await getTrendingMovies(fakeCache)
+        const hit = await getTrendingMovies(fakeCache)
         expect(miss.map((m) => m.id)).toEqual([9])
         expect(hit.map((m) => m.id)).toEqual([9])
         expect(fetchCalls).toBe(1)
