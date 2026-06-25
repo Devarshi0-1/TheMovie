@@ -48,6 +48,23 @@ const defaultEmbedder: RawEmbedder = async (texts) => {
 }
 
 /**
+ * The vector cache, isolated behind a function type so tests inject a fake
+ * instead of mocking the shared `./redis` module (a global module mock leaks
+ * across test files — see the order-dependent-test bug this avoids).
+ */
+export interface EmbeddingCache {
+    get(key: string): Promise<string | null>
+    set(key: string, value: string, ttlSeconds: number): Promise<void>
+}
+
+const redisCache: EmbeddingCache = {
+    get: (key) => redis.get(key),
+    set: async (key, value, ttlSeconds) => {
+        await redis.set(key, value, 'EX', ttlSeconds)
+    },
+}
+
+/**
  * Stable SHA-256 hex digest of the source text — the cache key and the
  * ingestion idempotency key ("skip rows whose source text hash is unchanged").
  */
@@ -112,9 +129,12 @@ function assertApiKey(): void {
 
 // Best-effort cache read. If Redis is unreachable we degrade to embedding
 // everything rather than failing — the call is logged, not silently swallowed.
-async function readCachedVectors(hashes: string[]): Promise<(number[] | null)[]> {
+async function readCachedVectors(
+    hashes: string[],
+    cache: EmbeddingCache,
+): Promise<(number[] | null)[]> {
     try {
-        const raw = await Promise.all(hashes.map((h) => redis.get(cacheKey(h))))
+        const raw = await Promise.all(hashes.map((h) => cache.get(cacheKey(h))))
         return raw.map((value) => (value ? (JSON.parse(value) as number[]) : null))
     } catch (err) {
         console.warn('⚠️ Embedding cache read failed; treating all as misses:', err)
@@ -131,6 +151,7 @@ async function readCachedVectors(hashes: string[]): Promise<(number[] | null)[]>
 export async function embedTexts(
     texts: string[],
     embedder: RawEmbedder = defaultEmbedder,
+    cache: EmbeddingCache = redisCache,
 ): Promise<number[][]> {
     if (texts.length === 0) return []
 
@@ -144,7 +165,7 @@ export async function embedTexts(
     const vectorByHash = new Map<string, number[]>()
     const missingHashes: string[] = []
 
-    const cached = await readCachedVectors(uniqueHashes)
+    const cached = await readCachedVectors(uniqueHashes, cache)
     for (let i = 0; i < uniqueHashes.length; i++) {
         const vector = cached[i]
         if (vector) vectorByHash.set(uniqueHashes[i], vector)
@@ -184,8 +205,8 @@ export async function embedTexts(
         // already paid OpenAI to compute, so log per-key rather than reject.
         await Promise.all(
             missingHashes.map((h) =>
-                redis
-                    .set(cacheKey(h), JSON.stringify(vectorByHash.get(h)!), 'EX', CACHE_TTL_SECONDS)
+                cache
+                    .set(cacheKey(h), JSON.stringify(vectorByHash.get(h)!), CACHE_TTL_SECONDS)
                     .catch((err) => console.error(`⚠️ Failed to cache embedding ${h}:`, err)),
             ),
         )
@@ -207,8 +228,12 @@ export async function embedTexts(
 }
 
 /** Embed a single text (cache-aware). Used for query-time embedding. */
-export async function embedText(text: string, embedder?: RawEmbedder): Promise<number[]> {
-    const [vector] = await embedTexts([text], embedder)
+export async function embedText(
+    text: string,
+    embedder?: RawEmbedder,
+    cache?: EmbeddingCache,
+): Promise<number[]> {
+    const [vector] = await embedTexts([text], embedder, cache)
     return vector
 }
 
@@ -216,14 +241,16 @@ export async function embedText(text: string, embedder?: RawEmbedder): Promise<n
 export async function embedMovies(
     movies: EmbeddableMovie[],
     embedder?: RawEmbedder,
+    cache?: EmbeddingCache,
 ): Promise<number[][]> {
-    return embedTexts(movies.map(composeEmbeddingText), embedder)
+    return embedTexts(movies.map(composeEmbeddingText), embedder, cache)
 }
 
 /** Compose + embed a single movie. */
 export async function embedMovie(
     movie: EmbeddableMovie,
     embedder?: RawEmbedder,
+    cache?: EmbeddingCache,
 ): Promise<number[]> {
-    return embedText(composeEmbeddingText(movie), embedder)
+    return embedText(composeEmbeddingText(movie), embedder, cache)
 }

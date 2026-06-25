@@ -97,10 +97,8 @@ docker run --rm -p 3000:3000 --env-file .env themovie-backend
 
 ---
 
-## ⚠️ Known issue — unit test isolation (does NOT affect runtime/e2e)
+## ✅ Resolved — unit test isolation
 
-`bun test` is **order-dependent** and can fail under a different file ordering / Bun version (it did in the first CI run): `src/lib/tmdb.test.ts` and `src/lib/embeddings.test.ts` both call `mock.module('./redis', …)`, which is **process-global** in Bun and leaks across files despite `mock.restore()` (the same class of bug as an earlier `mock.module('ai')` leak). Locally, in this repo's natural order, the suite is green (175 pass); CI's order surfaced 4 `tmdb.test.ts` failures + 1 error.
+**Previously:** `bun test` was order-dependent and failed under a different file ordering / Bun version (it did in the first CI run): `src/lib/tmdb.test.ts` and `src/lib/embeddings.test.ts` both called `mock.module('./redis', …)`, which is process-global in Bun and leaked across files.
 
-**This is unit-test plumbing only — it has zero effect on the running server or e2e behavior.**
-
-**Durable fix (recommended before relying on CI):** stop `mock.module`-ing the shared `./redis` module. Inject the redis/cache dependency into `tmdb.ts` and `embeddings.ts` (the dependency-injection pattern already used by `ingest.ts`, `intent.ts`, `watchlist.ts`, `summary.ts`, `recommendations.ts`, `reviews.ts`) and have those two tests pass fakes instead of mocking the module. Then no test mutates a shared module's global registry, and the suite becomes order-independent.
+**Fixed** by removing `mock.module` for `./redis` entirely. `tmdb.ts` and `embeddings.ts` now take an injectable cache (`TmdbCache` / `EmbeddingCache`, defaulting to a Redis-backed implementation) — the dependency-injection pattern used throughout the codebase — and the two tests pass in-memory fakes. No test mutates a shared module's global registry, so the suite is order-independent (verified green across both file orderings and repeated runs). There are now **no `mock.module` calls anywhere in the suite.**
