@@ -34,7 +34,10 @@ export interface ChatContext {
 
 export interface ChatDeps {
     gate: (query: string) => Promise<GateDecision>
-    runAgent: (messages: UIMessage[]) => Promise<{
+    runAgent: (
+        messages: UIMessage[],
+        opts?: { userId?: string },
+    ) => Promise<{
         toUIMessageStreamResponse: (options?: {
             originalMessages?: UIMessage[]
             generateMessageId?: () => string
@@ -84,7 +87,7 @@ export async function handleChat(
         return refusalResponse(refusal, conversationId)
     }
 
-    const result = await deps.runAgent([...history, userMessage])
+    const result = await deps.runAgent([...history, userMessage], { userId: ctx.userId })
     return result.toUIMessageStreamResponse({
         originalMessages: [...history, userMessage],
         generateMessageId: deps.generateId,

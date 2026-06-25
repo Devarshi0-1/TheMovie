@@ -7,6 +7,7 @@ import {
     type UIMessage,
 } from 'ai'
 import { retrievalTools } from './tools'
+import { createWatchlistTools } from './watchlistTools'
 
 // The reasoning agent runs gpt-5 (the expensive tier) — it only ever sees
 // queries the cheap intent gate already approved.
@@ -24,7 +25,9 @@ You have retrieval tools. Use the CHEAPEST tier that can answer, and escalate on
 1. search_movies_sql — FIRST choice for concrete/exact queries (a title, a genre, a year, or a combination like "sci-fi from 2010"). Cheapest and most precise.
 2. semantic_search_movies — for conceptual or thematic queries that keywords can't capture (e.g. "a movie where the hero later becomes the villain"). Use when SQL search is unsuitable or returns nothing relevant.
 3. fetch_from_tmdb — LAST RESORT, only when the local catalog misses (a brand-new release, an obscure title, or both searches above came up empty).
-Use get_movie_details for facts about a specific movie the user has identified, and get_trending for open-ended "what's popular" requests.
+Use get_movie_details for facts about a specific movie the user has identified, and get_trending for open-ended "what's popular" requests. Use summarize_reviews for spoiler-free audience reception of a specific movie.
+
+For watchlists: use get_user_watchlist to see what's on the user's list. To add or remove a movie, call manage_watchlist to PROPOSE the change — it does not modify anything until the user confirms, so never claim a movie was added/removed until that's confirmed.
 
 When you have results, reason over them and reply with a short, ranked set of suggestions, each with a one-line, spoiler-free reason it fits the request. Be concise and friendly. If nothing fits, say so plainly and suggest how the user could refine their request. Never invent movies or details that the tools did not return.`
 
@@ -87,14 +90,18 @@ function logChatFinish(
  * the caller streams it to the client via `toUIMessageStreamResponse()`. Assumes
  * the query already passed the intent gate.
  */
-export async function runAgent(messages: UIMessage[]) {
-    const modelMessages = await convertToModelMessages(messages, { tools: retrievalTools })
+export async function runAgent(messages: UIMessage[], opts: { userId?: string } = {}) {
+    // Watchlist tools are bound to the user; retrieval tools are stateless.
+    const tools =
+        opts.userId ? { ...retrievalTools, ...createWatchlistTools(opts.userId) } : retrievalTools
+
+    const modelMessages = await convertToModelMessages(messages, { tools })
 
     return streamText({
         model: openai(AGENT_MODEL),
         system: SYSTEM_PROMPT,
         messages: modelMessages,
-        tools: retrievalTools,
+        tools,
         stopWhen: stepCountIs(MAX_STEPS),
         onFinish: ({ steps, totalUsage }) => logChatFinish(steps, totalUsage),
     })

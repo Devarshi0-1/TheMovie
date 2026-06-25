@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 5.1 — Watchlist: CRUD endpoints (`src/routes/watchlist.ts`, authenticated, respecting `unique_user_movie`), O(1) membership via Redis Sets, and the conversational `manage_watchlist` / `get_user_watchlist` agent tools (deferred from 4.2) **with** the human-in-the-loop confirmation gate (deferred from 4.4). _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embeddings + ingestion · ✅ Phase 4 — intent gate, retrieval tiers, agent loop + `/api/v1/chat`, conversation memory, review summarization. Deferred into Phase 5: watchlist agent tools + HITL confirmation.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 5.2 — Reviews & personalized recs: user reviews in Postgres (recent-reviews cached in a Redis List), and "because you watched X" recommendations combining the watchlist with pgvector kNN from watched movies' embeddings, ranked/explained by the agent. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 · ✅ Phase 4 — full chat agent · ✅ Phase 5.1 watchlist (CRUD + Redis membership + agent tools + HITL scaffold; confirmation UI is Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -17,6 +17,7 @@
 > - [ ] **Phase 4.3 chat endpoint** — `POST /api/v1/chat` (authenticated) with a real `OPENAI_API_KEY` + seeded DB: confirm gpt-5 streams a synthesized answer, tool/retrieval activity surfaces to `useChat`, a blocked query streams the refusal, and the `onFinish` log shows retrieval paths + token usage.
 > - [ ] **Phase 4.4 conversation memory** — apply migration `0004`; over a live DB confirm turns persist, a follow-up request loads prior history (multi-turn context works), and another user can't read/append to someone else's conversation.
 > - [ ] **Phase 4.5 review summary** — `GET /api/v1/movies/:id/summary` (and the `summarize_reviews` tool) with live TMDB + `OPENAI_API_KEY`: confirm a spoiler-free pros/cons/vibe summary returns, the no-reviews placeholder works, and a second call is served from the Redis cache.
+> - [ ] **Phase 5.1 watchlist** — over live DB + Redis: add/remove/list round-trips, `unique_user_movie` makes a re-add idempotent, `GET /:movieId/status` is correct (incl. cold-cache hydration), and another user can't see/mutate your list (auth).
 
 ## 📦 Tech Stack
 
@@ -177,10 +178,10 @@ The conversational window: natural-language movie discovery powered by a **Verce
 
 ## 🚩 Phase 5: High-Performance User Features
 
-### Milestone 5.1: Watchlist
-* [ ] **CRUD endpoints** for `watchlist` (`src/routes/watchlist.ts`): add/remove/list, authenticated, respecting the existing `unique_user_movie` constraint.
-* [ ] **O(1) membership** via Redis Sets (`SADD`/`SREM`/`SISMEMBER`) for "is this in my watchlist?"; sync to Postgres (dual-write or write-behind).
-* [ ] **Conversational watchlist**: wire the `manage_watchlist` agent tool (Phase 4.1) to these endpoints so users can add/remove via chat.
+### Milestone 5.1: Watchlist  _(complete; live DB/Redis + HITL UI pending)_
+* [x] **CRUD endpoints** (`src/routes/watchlist.ts`, mounted at `/api/v1/watchlist`, authenticated via a session middleware): `GET /` (list), `POST /` (add — 201 new / 200 idempotent), `DELETE /:movieId` (idempotent), `GET /:movieId/status` (membership). Body validated with shared Zod (`WatchlistAddSchema`). Backed by `src/lib/watchlist.ts` respecting `unique_user_movie` (`onConflictDoNothing`).
+* [x] **O(1) membership** via a Redis Set per user (`watchlist:{userId}`, `sadd`/`srem`/`sismember`), dual-written with Postgres (the source of truth) and **hydrated from Postgres on a cold miss** so membership is always correct.
+* [x] **Conversational watchlist**: request-scoped agent tools (`src/agent/watchlistTools.ts`, bound to the authed user, merged into the agent toolset via `runAgent(messages, { userId })`): `get_user_watchlist` (read, auto-executes) and `manage_watchlist` (mutate). **HITL: `manage_watchlist` has no `execute`** — the model only *proposes* the change; the user confirms and the mutation is applied via the REST endpoint (this satisfies the Phase 4.4 human-in-the-loop requirement). The approve/deny UI + `addToolResult` wiring is **Phase 7.3** (frontend). _Service/tools verified offline (`watchlist.test.ts`, `watchlistTools.test.ts`); live DB/Redis CRUD + membership pending env._
 
 ### Milestone 5.2: Reviews & Personalized Recs
 * [ ] **User reviews** stored in Postgres; cache "recent reviews" per movie in a Redis List (`LPUSH`/`LTRIM`).
