@@ -41,6 +41,9 @@ export function AppHeader() {
                     <Link to="/" className="appheader__link" activeOptions={{ exact: true }}>
                         Discover
                     </Link>
+                    <Link to="/chat" className="appheader__link">
+                        Chat
+                    </Link>
                     <Link to="/watchlist" className="appheader__link">
                         Watchlist
                     </Link>

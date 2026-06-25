@@ -4,6 +4,10 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
 
+// jsdom doesn't implement scrollIntoView; stub it so auto-scroll effects (e.g.
+// the chat window scrolling to the latest message) don't throw on mount.
+Element.prototype.scrollIntoView = () => {}
+
 afterEach(() => {
     cleanup()
 })
