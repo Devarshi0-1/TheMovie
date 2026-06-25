@@ -6,6 +6,8 @@ import { auth } from './lib/auth'
 import { db } from './db'
 import chatRoute from './routes/chat'
 import moviesRoute from './routes/movies'
+import recommendationsRoute from './routes/recommendations'
+import reviewsRoute from './routes/reviews'
 import watchlistRoute from './routes/watchlist'
 
 export const app = new Hono()
@@ -42,6 +44,8 @@ app.get('/api/me', async (c) => {
 app.route('/api/v1/movies', moviesRoute)
 app.route('/api/v1/chat', chatRoute)
 app.route('/api/v1/watchlist', watchlistRoute)
+app.route('/api/v1/reviews', reviewsRoute)
+app.route('/api/v1/recommendations', recommendationsRoute)
 
 // Bound each dependency probe so an unreachable service reports `down`
 // quickly instead of hanging on a connection attempt. The rejection handler

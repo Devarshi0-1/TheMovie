@@ -1,12 +1,13 @@
 import { tool } from 'ai'
 import { z } from 'zod'
+import { recommendForUser } from '../lib/recommendations'
 import { getWatchlist } from '../lib/watchlist'
 import { ManageWatchlistInputSchema } from '../schemas/watchlist'
 
-// Watchlist agent tools are request-scoped: they're bound to the authenticated
-// user, so they're built per request rather than living as module singletons
-// like the (stateless) retrieval tools.
-export function createWatchlistTools(userId: string) {
+// Per-user agent tools — bound to the authenticated user, so they're built per
+// request rather than living as module singletons like the (stateless)
+// retrieval tools.
+export function createUserTools(userId: string) {
     return {
         get_user_watchlist: tool({
             description:
@@ -14,6 +15,15 @@ export function createWatchlistTools(userId: string) {
                 'their list, or to give context for recommendations.',
             inputSchema: z.object({}),
             execute: () => getWatchlist(userId),
+        }),
+
+        get_recommendations: tool({
+            description:
+                'Get personalized "because you watched X" recommendations for the current user, ' +
+                'derived from their watchlist via similarity search. Use for "recommend me something", ' +
+                '"what should I watch", or when the user wants suggestions based on their taste.',
+            inputSchema: z.object({}),
+            execute: () => recommendForUser(userId),
         }),
 
         // Human-in-the-loop: NO `execute`. Mutations must never auto-run from the
@@ -30,4 +40,4 @@ export function createWatchlistTools(userId: string) {
     }
 }
 
-export type WatchlistToolName = keyof ReturnType<typeof createWatchlistTools>
+export type UserToolName = keyof ReturnType<typeof createUserTools>

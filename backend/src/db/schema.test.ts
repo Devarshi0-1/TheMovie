@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getTableConfig } from 'drizzle-orm/pg-core'
-import { chatMessage, conversation, movies } from './schema'
+import { chatMessage, conversation, movies, review } from './schema'
 
 // Offline schema verification. Applying the migration against a live
 // Postgres+pgvector is pending a reachable DB (tracked in the PR).
@@ -101,6 +101,34 @@ describe('movies migration (offline; live apply pending env)', () => {
         expect(sql).toContain('CREATE TABLE "chat_message"')
         // chat_message → conversation FK with cascade delete.
         expect(sql).toMatch(/chat_message.*conversation.*ON DELETE cascade/s)
+    })
+
+    it('creates the review table with a unique (user, movie) (Phase 5.2)', () => {
+        const dir = join(import.meta.dir, '..', '..', 'drizzle')
+        const sql = readdirSync(dir)
+            .filter((f) => f.endsWith('.sql'))
+            .map((f) => readFileSync(join(dir, f), 'utf8'))
+            .join('\n')
+
+        expect(sql).toContain('CREATE TABLE "review"')
+        expect(sql).toContain('UNIQUE("user_id","movie_id")')
+    })
+})
+
+describe('review schema', () => {
+    it('has the expected columns; content required, rating nullable (feature)', () => {
+        const cfg = getTableConfig(review)
+        const cols = cfg.columns.map((c) => c.name).sort()
+        expect(cols).toEqual(
+            ['id', 'user_id', 'movie_id', 'rating', 'content', 'created_at', 'updated_at'].sort(),
+        )
+        expect(cfg.columns.find((c) => c.name === 'content')?.notNull).toBe(true)
+        expect(cfg.columns.find((c) => c.name === 'rating')?.notNull).toBe(false)
+    })
+
+    it('is indexed by movie for the per-movie listing (feature)', () => {
+        const cfg = getTableConfig(review)
+        expect(cfg.indexes.find((i) => i.config.name === 'review_movie_idx')).toBeDefined()
     })
 })
 

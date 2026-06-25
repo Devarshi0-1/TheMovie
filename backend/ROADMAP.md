@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 5.2 — Reviews & personalized recs: user reviews in Postgres (recent-reviews cached in a Redis List), and "because you watched X" recommendations combining the watchlist with pgvector kNN from watched movies' embeddings, ranked/explained by the agent. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 · ✅ Phase 4 — full chat agent · ✅ Phase 5.1 watchlist (CRUD + Redis membership + agent tools + HITL scaffold; confirmation UI is Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 6.1 — Security & limits: Redis sliding-window rate limiting (tighter on `/api/v1/chat`), Hono `secureHeaders`, auth hardening (raise `minPasswordLength`, re-enable origin checks, review CORS), and input validation at every boundary. _(✅ Phase 0 · ✅ Phase 1 — auth hardening lands here · ✅ Phase 2 · ✅ Phase 3 · ✅ Phase 4 — full chat agent · ✅ Phase 5 — watchlist, reviews, personalized recs. Pending: HITL confirmation UI (Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -18,6 +18,7 @@
 > - [ ] **Phase 4.4 conversation memory** — apply migration `0004`; over a live DB confirm turns persist, a follow-up request loads prior history (multi-turn context works), and another user can't read/append to someone else's conversation.
 > - [ ] **Phase 4.5 review summary** — `GET /api/v1/movies/:id/summary` (and the `summarize_reviews` tool) with live TMDB + `OPENAI_API_KEY`: confirm a spoiler-free pros/cons/vibe summary returns, the no-reviews placeholder works, and a second call is served from the Redis cache.
 > - [ ] **Phase 5.1 watchlist** — over live DB + Redis: add/remove/list round-trips, `unique_user_movie` makes a re-add idempotent, `GET /:movieId/status` is correct (incl. cold-cache hydration), and another user can't see/mutate your list (auth).
+> - [ ] **Phase 5.2 reviews + recs** — apply migration `0005`; confirm review upsert + recent-list cache (and cold-hydrate); and that `GET /api/v1/recommendations` returns sensible "because you watched X" picks over a seeded pgvector catalog + `OPENAI_API_KEY`.
 
 ## 📦 Tech Stack
 
@@ -183,9 +184,10 @@ The conversational window: natural-language movie discovery powered by a **Verce
 * [x] **O(1) membership** via a Redis Set per user (`watchlist:{userId}`, `sadd`/`srem`/`sismember`), dual-written with Postgres (the source of truth) and **hydrated from Postgres on a cold miss** so membership is always correct.
 * [x] **Conversational watchlist**: request-scoped agent tools (`src/agent/watchlistTools.ts`, bound to the authed user, merged into the agent toolset via `runAgent(messages, { userId })`): `get_user_watchlist` (read, auto-executes) and `manage_watchlist` (mutate). **HITL: `manage_watchlist` has no `execute`** — the model only *proposes* the change; the user confirms and the mutation is applied via the REST endpoint (this satisfies the Phase 4.4 human-in-the-loop requirement). The approve/deny UI + `addToolResult` wiring is **Phase 7.3** (frontend). _Service/tools verified offline (`watchlist.test.ts`, `watchlistTools.test.ts`); live DB/Redis CRUD + membership pending env._
 
-### Milestone 5.2: Reviews & Personalized Recs
-* [ ] **User reviews** stored in Postgres; cache "recent reviews" per movie in a Redis List (`LPUSH`/`LTRIM`).
-* [ ] **Personalized AI recommendations** ("because you watched X"): a dedicated step that combines the user's watchlist with **vector similarity** (kNN from watched movies' embeddings) to assemble candidates, then has the agent (`generateText`/`generateObject`) rank and explain the picks.
+### Milestone 5.2: Reviews & Personalized Recs  _(complete; live DB/Redis/model pending env)_
+* [x] **User reviews** in Postgres (`review` table, migration `0005`, one per user/movie via `unique_user_movie_review`, editable by upsert). `src/lib/reviews.ts`: `upsertReview` / `getRecentReviews`, with recent reviews mirrored to a Redis List (`movie:{id}:reviews:recent`, `LPUSH`/`LTRIM`) and hydrated from Postgres on a cold miss. Endpoints (`src/routes/reviews.ts`, `/api/v1/reviews`): `POST /` (auth, upsert), `GET /movie/:movieId` (public, recent).
+* [x] **Personalized AI recommendations** ("because you watched X"): `src/lib/recommendations.ts` `recommendForUser` seeds from the user's watchlist, runs **pgvector cosine kNN** per watched movie (`cosineDistance`, excluding already-watched), merges candidates (dedupe keeping the highest-similarity source for attribution), then has the agent (`generateObject`, **`gpt-5-mini`**, shared `RecommendationsSchema`) rank + explain. Empty watchlist / no candidates short-circuit with no model call. Exposed as `GET /api/v1/recommendations` (auth) and the `get_recommendations` agent tool. _Verified offline (`reviews.test.ts`, `recommendations.test.ts`); live DB kNN + ranking pending env._
+* [x] **Per-user agent tools** consolidated in `src/agent/userTools.ts` (`createUserTools`): `get_user_watchlist`, `get_recommendations` (both read/auto-execute), and the HITL `manage_watchlist` (renamed from `watchlistTools.ts`).
 
 ---
 
