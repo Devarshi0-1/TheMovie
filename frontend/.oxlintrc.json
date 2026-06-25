@@ -1,0 +1,18 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["react", "typescript", "jsx-a11y", "import"],
+    "env": {
+        "browser": true,
+        "es2024": true
+    },
+    "categories": {
+        "correctness": "error",
+        "suspicious": "warn"
+    },
+    "rules": {
+        "react/react-in-jsx-scope": "off",
+        "react/no-unknown-property": "error",
+        "import/no-unassigned-import": "off"
+    },
+    "ignorePatterns": ["src/routeTree.gen.ts", "dist", ".output", ".nitro", "coverage"]
+}

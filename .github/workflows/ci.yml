@@ -29,6 +29,33 @@ jobs:
       - name: Test
         run: bun test
 
-  # Frontend job (vitest + oxlint + tsgo) is added in Phase 7.1, once the
-  # `frontend/` package exists. Configure branch protection to require the
-  # "Backend — typecheck + test" check so failures block merge.
+  frontend:
+    name: Frontend — lint + typecheck + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint (oxlint)
+        run: bunx oxlint
+
+      # `typecheck` runs `tsr generate` first — the route tree is gitignored, so
+      # CI regenerates it before tsgo. Uses tsgo (the native TS compiler) v7.
+      - name: Type-check (tsgo)
+        run: bun run typecheck
+
+      - name: Test (vitest)
+        run: bun run test
+
+  # Branch protection: require both "Backend — typecheck + test" and
+  # "Frontend — lint + typecheck + test" checks so failures block merge.

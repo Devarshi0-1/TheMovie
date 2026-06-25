@@ -1,0 +1,12 @@
+# TanStack Router generates this on dev/build/`tsr generate` — never hand-edit,
+# never commit. CI regenerates it before typecheck (see `routes:gen`).
+src/routeTree.gen.ts
+
+# Build output
+.output
+.nitro
+.tanstack
+dist
+
+# Test coverage
+coverage
