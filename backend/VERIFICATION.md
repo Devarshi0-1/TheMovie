@@ -4,28 +4,21 @@
 
 ## 0. Prerequisites
 
-- **Bun** installed.
-- **Postgres with the `pgvector` extension available.** Migration `0002` runs `CREATE EXTENSION IF NOT EXISTS vector`, which requires the extension to be installed in the server. Easiest: the `pgvector/pgvector:pg16` (or `ankane/pgvector`) Docker image.
-- **Redis** reachable.
-- A **TMDB read access token** and an **OpenAI API key** with access to `gpt-5`, `gpt-5-mini`, and `text-embedding-3-small` (pin to models your account actually has — see `CLAUDE.md`).
+- **Bun** and **Docker** installed.
+- A **TMDB v4 read-access token** and an **OpenAI API key** with access to `gpt-5`, `gpt-5-mini`, and `text-embedding-3-small` (pin to models your account actually has — see `CLAUDE.md`).
 
-### `backend/.env` (gitignored — never commit)
-
-```
-DATABASE_URL=postgres://user:pass@host:5432/themovie
-REDIS_URL=redis://localhost:6379
-FRONTEND_URL=http://localhost:3000
-TMDB_READ_ACCESS_API_KEY=...
-OPENAI_API_KEY=...
-BETTER_AUTH_SECRET=<long random string>
-```
-
-## 1. Install + migrate
+## 1. Datastores + env + install + migrate
 
 ```bash
+# From the repo root: Postgres (pgvector) + Redis via docker-compose.yml.
+docker compose up -d
+
 cd backend
+cp .env.example .env       # then fill in TMDB_READ_ACCESS_API_KEY, OPENAI_API_KEY,
+                           # and BETTER_AUTH_SECRET (`openssl rand -base64 32`).
+                           # DATABASE_URL/REDIS_URL defaults already match compose.
 bun install
-bunx drizzle-kit migrate   # applies 0000 → 0005 (incl. pgvector extension + HNSW/GIN indexes)
+bun run db:migrate         # applies 0000 → 0005 (pgvector extension + HNSW/GIN indexes)
 ```
 
 ✅ Expect: migrations apply cleanly; `\dx` shows `vector`; `\d movies` shows the `embedding vector(1536)` column, `movies_embedding_hnsw_idx`, `movies_metadata_gin_idx`. (ROADMAP debt: Phase 2.2 / 3.1 / 3.3 / 4.4 / 5.2 migrations.)
