@@ -21,8 +21,23 @@ import {
 const jsonbNative = <TData>(name: string) =>
     customType<{ data: TData; driverData: unknown }>({
         dataType: () => 'jsonb',
+        // Identity ON WRITE — this MUST stay a passthrough: any encoding here
+        // (e.g. JSON.stringify) reintroduces the double-encoding bug, since
+        // bun-sql already serializes the value once.
         toDriver: (value: TData) => value as unknown,
-        fromDriver: (value: unknown) => value as TData,
+        // Defensive ON READ: bun-sql returns native jsonb already parsed, so the
+        // common case is a passthrough. But a row written by the OLD stock-jsonb
+        // schema is stored as a JSON *string scalar* and comes back as a string;
+        // parse it so legacy/un-reseeded rows still surface as arrays/objects
+        // instead of silently becoming `[]`. Non-JSON strings are returned as-is.
+        fromDriver: (value: unknown) => {
+            if (typeof value !== 'string') return value as TData
+            try {
+                return JSON.parse(value) as TData
+            } catch {
+                return value as TData
+            }
+        },
     })(name)
 
 export const user = pgTable('user', {
@@ -140,8 +155,10 @@ export const movies = pgTable(
             .$onUpdate(() => new Date()),
     },
     (t) => [
-        // GIN index on the raw TMDB metadata for fast JSON containment queries.
-        index('movies_metadata_gin_idx').using('gin', t.metadata),
+        // GIN index on `genres` — the column actually filtered with jsonb
+        // membership (`genres ? 'Action'`) in search_movies_sql. (The old index
+        // was on `metadata`, which no query ever filters — dead weight.)
+        index('movies_genres_gin_idx').using('gin', t.genres),
         // HNSW index for cosine-distance kNN over embeddings (semantic search).
         index('movies_embedding_hnsw_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
     ],

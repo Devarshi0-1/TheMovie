@@ -6,23 +6,27 @@ import type { ReviewEntry, ReviewInput } from '../schemas/review'
 
 // User reviews. Postgres is the source of truth (one review per user/movie,
 // editable via upsert); the most recent reviews per movie are mirrored to a
-// Redis List (`movie:{id}:reviews:recent`) for a fast "recent reviews" read,
-// hydrated from Postgres on a cold miss. All IO behind injectable deps.
+// Redis key (`movie:{id}:reviews:recent`, a JSON-encoded array) for a fast
+// "recent reviews" read, hydrated from Postgres on a cold miss. All IO behind
+// injectable deps.
 
 const RECENT_LIMIT = 20
+// Backstop TTL on the recent-reviews cache. Writes invalidate the key eagerly,
+// so this only bounds staleness if an invalidation is ever missed.
+const RECENT_TTL_SECONDS = 60 * 60
 
 const recentKey = (movieId: number) => `movie:${movieId}:reviews:recent`
 
 export interface ReviewDeps {
     /** Upsert the user's review (one per user/movie); returns the stored entry. */
     dbUpsert(userId: string, input: ReviewInput): Promise<ReviewEntry>
-    /** All reviews for a movie, newest first. */
+    /** The newest reviews for a movie (capped at RECENT_LIMIT), newest first. */
     dbListForMovie(movieId: number): Promise<ReviewEntry[]>
     /** Drop the movie's recent-reviews cache so the next read re-hydrates from Postgres. */
     cacheInvalidateRecent(movieId: number): Promise<void>
-    /** Recent entries from the cache, or null if the list isn't populated (cold). */
+    /** Cached recent entries (possibly empty), or null if the key is absent (cold). */
     cacheGetRecent(movieId: number): Promise<ReviewEntry[] | null>
-    /** Replace the recent-reviews list with these entries (newest first). */
+    /** Cache the recent-reviews list (newest first); caches an empty list too. */
     cacheHydrateRecent(movieId: number, entries: ReviewEntry[]): Promise<void>
 }
 
@@ -50,11 +54,14 @@ function defaultDeps(): ReviewDeps {
         },
 
         async dbListForMovie(movieId) {
+            // Only the recent window is ever shown; cap the fetch so a movie with
+            // thousands of reviews doesn't pull (and deserialize) them all.
             const rows = await db
                 .select()
                 .from(review)
                 .where(eq(review.movieId, movieId))
                 .orderBy(desc(review.createdAt))
+                .limit(RECENT_LIMIT)
             return rows.map(toEntry)
         },
 
@@ -63,20 +70,19 @@ function defaultDeps(): ReviewDeps {
         },
 
         async cacheGetRecent(movieId) {
-            const raw = await redis.lrange(recentKey(movieId), 0, -1)
-            if (raw.length === 0) return null
-            return raw.map((r) => JSON.parse(r) as ReviewEntry)
+            // A single JSON value (not a List) so an empty array is a real cache
+            // HIT, distinguishable from an absent key — `get` returns null only
+            // when the key is missing (cold).
+            const raw = await redis.get(recentKey(movieId))
+            if (raw === null) return null
+            return JSON.parse(raw) as ReviewEntry[]
         },
 
         async cacheHydrateRecent(movieId, entries) {
-            if (entries.length === 0) return
-            // Oldest pushed first so the newest ends up at the head of the list.
-            const [first, ...rest] = entries
-                .slice(0, RECENT_LIMIT)
-                .reverse()
-                .map((e) => JSON.stringify(e))
-            await redis.lpush(recentKey(movieId), first, ...rest)
-            await redis.ltrim(recentKey(movieId), 0, RECENT_LIMIT - 1)
+            // Cache even an empty list: a zero-review movie must become a cache
+            // hit, not a permanent cold miss that re-queries Postgres every read.
+            const recent = JSON.stringify(entries.slice(0, RECENT_LIMIT))
+            await redis.set(recentKey(movieId), recent, 'EX', RECENT_TTL_SECONDS)
         },
     }
 }

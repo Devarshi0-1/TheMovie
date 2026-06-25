@@ -43,6 +43,13 @@
       "when": 1782366489614,
       "tag": "0005_add_reviews",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782377363467,
+      "tag": "0006_swap_genres_gin_index",
+      "breakpoints": true
     }
   ]
 }

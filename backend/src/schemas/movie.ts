@@ -58,13 +58,19 @@ export type SemanticSearchInput = z.infer<typeof SemanticSearchInputSchema>
 
 export const FetchFromTmdbInputSchema = z.object({
     query: z.string().min(1).optional().describe('Title/keywords to search TMDB for.'),
+    // Deliberately NOT `.positive()`: gpt-5 routinely fills this optional field
+    // with a `0` placeholder alongside a real `query`. Rejecting 0 at the schema
+    // would fail the whole tool call; instead fetchFromTmdb treats a non-positive
+    // id as "absent" so the query path wins (see retrieval.ts).
     tmdbId: z.number().int().optional().describe('A specific TMDB movie id to fetch.'),
     limit: z.number().int().min(1).max(10).default(3).describe('Max results when searching.'),
 })
 export type FetchFromTmdbInput = z.infer<typeof FetchFromTmdbInputSchema>
 
 export const MovieDetailsInputSchema = z.object({
-    tmdbId: z.number().int().describe('The TMDB movie id to fetch full details for.'),
+    // Required id → validate positivity at the boundary; a 0/negative is a bug
+    // (it 404s against TMDB), so reject it here rather than fetching movie id 0.
+    tmdbId: z.number().int().positive().describe('The TMDB movie id to fetch full details for.'),
 })
 export type MovieDetailsInput = z.infer<typeof MovieDetailsInputSchema>
 
@@ -74,7 +80,11 @@ export const TrendingInputSchema = z.object({
 export type TrendingInput = z.infer<typeof TrendingInputSchema>
 
 export const ReviewSummaryInputSchema = z.object({
-    tmdbId: z.number().int().describe('The TMDB movie id whose audience reviews to summarize.'),
+    tmdbId: z
+        .number()
+        .int()
+        .positive()
+        .describe('The TMDB movie id whose audience reviews to summarize.'),
 })
 export type ReviewSummaryInput = z.infer<typeof ReviewSummaryInputSchema>
 

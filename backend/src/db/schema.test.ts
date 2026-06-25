@@ -41,11 +41,12 @@ describe('movies table schema', () => {
         expect(cfg.columns.find((c) => c.name === 'overview')?.notNull).toBe(false)
     })
 
-    it('has a GIN index for metadata (feature: JSON containment search)', () => {
-        // The index *method* (USING gin) is asserted against the generated SQL
-        // below — drizzle's runtime IndexConfig doesn't surface it cleanly.
-        const gin = cfg.indexes.find((i) => i.config.name === 'movies_metadata_gin_idx')
+    it('has a GIN index on genres (feature: jsonb membership for the genre filter)', () => {
+        // The GIN index must be on `genres` — the column search_movies_sql filters
+        // with `genres ? 'Action'` — not `metadata`, which no query ever filters.
+        const gin = cfg.indexes.find((i) => i.config.name === 'movies_genres_gin_idx')
         expect(gin).toBeDefined()
+        expect(cfg.indexes.find((i) => i.config.name === 'movies_metadata_gin_idx')).toBeUndefined()
     })
 
     it('has an embedding vector column + HNSW index (feature: semantic kNN)', () => {
@@ -56,7 +57,7 @@ describe('movies table schema', () => {
 })
 
 describe('movies migration (offline; live apply pending env)', () => {
-    it('generates CREATE TABLE movies + unique tmdb_id + GIN index', () => {
+    it('generates CREATE TABLE movies + unique tmdb_id + genres GIN index', () => {
         const dir = join(import.meta.dir, '..', '..', 'drizzle')
         const sql = readdirSync(dir)
             .filter((f) => f.endsWith('.sql'))
@@ -65,7 +66,11 @@ describe('movies migration (offline; live apply pending env)', () => {
 
         expect(sql).toContain('CREATE TABLE "movies"')
         expect(sql).toContain('UNIQUE("tmdb_id")')
-        expect(sql.toLowerCase()).toContain('using gin ("metadata")')
+        // The GIN index was swapped from metadata (never queried) onto genres
+        // (the column the genre filter uses): the swap migration must drop the
+        // old one and create the new.
+        expect(sql.toLowerCase()).toContain('using gin ("genres")')
+        expect(sql).toContain('DROP INDEX "movies_metadata_gin_idx"')
     })
 
     it('enables pgvector + adds the embedding column & HNSW index', () => {
@@ -155,6 +160,20 @@ describe('jsonb columns store native jsonb, not double-encoded strings (regressi
         const parts = [{ type: 'text', text: 'hi' }]
         expect(chatMessage.parts.mapToDriverValue(parts)).toEqual(parts)
         expect(typeof chatMessage.parts.mapToDriverValue(parts)).not.toBe('string')
+    })
+
+    it('reads native jsonb through untouched but parses legacy string scalars (regression)', () => {
+        // Native rows: bun-sql returns the value already parsed → passthrough.
+        expect(movies.genres.mapFromDriverValue(['Action', 'Crime'])).toEqual(['Action', 'Crime'])
+        expect(movies.metadata.mapFromDriverValue({ status: 'Released' })).toEqual({
+            status: 'Released',
+        })
+        // Legacy rows written by the OLD stock-jsonb schema come back as a JSON
+        // *string*; fromDriver must parse them so genres aren't silently dropped
+        // (a non-array would make asStringArray return []).
+        expect(movies.genres.mapFromDriverValue('["Action","Crime"]')).toEqual(['Action', 'Crime'])
+        // A non-JSON string is returned as-is rather than throwing.
+        expect(movies.genres.mapFromDriverValue('not json')).toBe('not json')
     })
 })
 

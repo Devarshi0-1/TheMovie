@@ -1,14 +1,30 @@
 import { describe, expect, it } from 'bun:test'
 import {
     fetchFromTmdb,
+    genreContains,
     getMovieDetails,
     getTrending,
     searchMoviesSql,
     semanticSearchMovies,
     type RetrievalDeps,
 } from './retrieval'
+import { db } from '../db'
+import { movies } from '../db/schema'
 import type { MovieForIngest } from '../lib/tmdb'
 import type { ScoredMovieResult } from '../schemas/movie'
+
+describe('genreContains (genre filter binds a jsonb membership test, not a string scalar)', () => {
+    it('binds the bare genre name and never the double-encoded array string (regression)', () => {
+        const { sql, params } = db.select().from(movies).where(genreContains('Action')).toSQL()
+        // The bare genre is bound as a parameter…
+        expect(params).toContain('Action')
+        // …NOT the `JSON.stringify([genre])` form that the old `@> $1::jsonb`
+        // filter bound, which Postgres parsed into a jsonb *string scalar* so the
+        // containment matched nothing.
+        expect(params).not.toContain('["Action"]')
+        expect(sql).not.toContain('::jsonb')
+    })
+})
 
 const detail = (over: Partial<MovieForIngest> = {}): MovieForIngest =>
     ({
@@ -160,7 +176,10 @@ describe('fetchFromTmdb', () => {
         // query. `0` must NOT be treated as a real id (fetching movie id 0 is a
         // 404); the query path must win.
         const { deps, calls } = fakeDeps({ tmdbSearchIds: async () => [41428] })
-        const out = await fetchFromTmdb({ query: 'Tetsuo: The Iron Man', tmdbId: 0, limit: 3 }, deps)
+        const out = await fetchFromTmdb(
+            { query: 'Tetsuo: The Iron Man', tmdbId: 0, limit: 3 },
+            deps,
+        )
         // tmdbDetail is reached via the search path with the searched id, never 0.
         expect(calls.tmdbDetail).toEqual([41428])
         expect(out).toHaveLength(1)

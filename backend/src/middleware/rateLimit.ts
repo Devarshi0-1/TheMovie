@@ -1,5 +1,6 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import { redis } from '../lib/redis'
+import { withTimeout } from '../lib/withTimeout'
 
 // Fixed-window rate limiting via Redis INCR + EXPIRE (the cheap, atomic-enough
 // pattern named in the roadmap): the first hit in a window sets the TTL, and the
@@ -10,11 +11,24 @@ export interface RateLimitStore {
     hit(key: string, windowSeconds: number): Promise<number>
 }
 
+// This runs on every rate-limited request (the global hot path), so a Redis
+// outage must fail OPEN *fast*. The client already bounds a hung command (see
+// lib/redis `connectionTimeout`), but ~2s on every request is too slow here, so
+// we additionally race each command against a short timeout — the rejection
+// trips the middleware's fail-open catch in well under a second.
+const STORE_TIMEOUT_MS = 750
+
 export const redisRateLimitStore: RateLimitStore = {
     async hit(key, windowSeconds) {
-        const count = await redis.incr(key)
+        const count = await withTimeout(redis.incr(key), STORE_TIMEOUT_MS, 'redis incr timed out')
         // Only the first request in the window arms the expiry.
-        if (count === 1) await redis.expire(key, windowSeconds)
+        if (count === 1) {
+            await withTimeout(
+                redis.expire(key, windowSeconds),
+                STORE_TIMEOUT_MS,
+                'redis expire timed out',
+            )
+        }
         return count
     },
 }

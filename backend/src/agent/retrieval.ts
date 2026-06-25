@@ -32,6 +32,20 @@ function asStringArray(value: unknown): string[] {
     return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
 }
 
+/**
+ * SQL predicate: the stored `genres` jsonb array contains `genre` as an element.
+ *
+ * `?` binds the bare genre name as a text param and tests array membership
+ * directly (GIN-indexable via the genres index). Do NOT revert to
+ * `@> ${JSON.stringify([genre])}::jsonb`: bun-sql binds the JS string
+ * `'["Action"]'` as a parameter, which `::jsonb` parses into a jsonb *string
+ * scalar* (`"[\"Action\"]"`, jsonb_typeof = string), so `array @> string`
+ * silently matches NOTHING — the exact bug this replaces.
+ */
+export function genreContains(genre: string) {
+    return sql`${movies.genres} ? ${genre}`
+}
+
 interface MovieRow {
     tmdbId: number
     title: string
@@ -116,10 +130,7 @@ function defaultDeps(): RetrievalDeps {
             const conditions = []
             if (filters.title) conditions.push(ilike(movies.title, `%${filters.title}%`))
             if (filters.year) conditions.push(like(movies.releaseDate, `${filters.year}%`))
-            if (filters.genre) {
-                // jsonb containment against the stored genre-name array.
-                conditions.push(sql`${movies.genres} @> ${JSON.stringify([filters.genre])}::jsonb`)
-            }
+            if (filters.genre) conditions.push(genreContains(filters.genre))
 
             const rows = await db
                 .select(MOVIE_COLUMNS)
