@@ -2,8 +2,10 @@ import { redis } from 'bun'
 import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { secureHeaders } from 'hono/secure-headers'
 import { auth } from './lib/auth'
 import { db } from './db'
+import { rateLimit } from './middleware/rateLimit'
 import chatRoute from './routes/chat'
 import moviesRoute from './routes/movies'
 import recommendationsRoute from './routes/recommendations'
@@ -12,10 +14,17 @@ import watchlistRoute from './routes/watchlist'
 
 export const app = new Hono()
 
+// Security headers on every response (nosniff, frame-deny, referrer policy, …).
+app.use('*', secureHeaders())
+
+// CORS restricted to the known frontend origins (never `*` with credentials).
+const allowedOrigins = [process.env.FRONTEND_URL, 'http://localhost:3000'].filter(
+    (o): o is string => Boolean(o),
+)
 app.use(
     '/*',
     cors({
-        origin: process.env.FRONTEND_URL!,
+        origin: (origin) => (allowedOrigins.includes(origin) ? origin : allowedOrigins[0]),
         allowHeaders: ['Content-Type', 'Authorization'],
         allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
         exposeHeaders: ['Content-Type'],
@@ -23,6 +32,12 @@ app.use(
         credentials: true,
     }),
 )
+
+// Rate limits (Redis-backed; fail-open). Tighter on the expensive AI chat
+// endpoint and on auth (brute-force) than on general API traffic.
+app.use('/api/auth/*', rateLimit({ prefix: 'auth', limit: 30, windowSeconds: 300 }))
+app.use('/api/v1/*', rateLimit({ prefix: 'api', limit: 120, windowSeconds: 60 }))
+app.use('/api/v1/chat/*', rateLimit({ prefix: 'chat', limit: 15, windowSeconds: 60 }))
 
 app.on(['POST', 'GET'], '/api/auth/*', (c) => {
     return auth.handler(c.req.raw)
