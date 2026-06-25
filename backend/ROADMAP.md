@@ -7,7 +7,7 @@
 > ▸ **Current focus:** **Phase 7.1 — Frontend scaffold** (Vite+ workspace with oxlint/oxfmt/Vitest/tsgo v7, TanStack Start + React 19, and `packages/schemas/` lifting the backend's Zod schemas into a shared package). **Live E2E verification is ✅ done** — the whole backend (Phases 0–6) was exercised against live Postgres+pgvector / Redis / OpenAI / TMDB per [`backend/VERIFICATION.md`](./VERIFICATION.md); all "Verification debt" boxes below are ticked. The live run surfaced and fixed **six bugs that only manifest against real services**: jsonb double-encoding (genres/keywords/metadata stored as string scalars → SQL `@>`/GIN filters silently matched nothing), Bun.serve's 10s `idleTimeout` killing the streaming chat agent mid-answer, `fetch_from_tmdb` treating a `tmdbId: 0` placeholder as a real id, the agent exhausting its step budget on heavy fan-out and streaming an empty answer, the review recent-list cache keeping a stale duplicate after an edit, and the Redis client never reconnecting after an outage. _(✅ Phase 0–6 — incl. live verification. Pending: HITL confirmation UI (Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ✅ **Verification debt — CLEARED (live run, 2026-06-25).** These were originally built/verified **offline** (schema, generated SQL, `tsc`, mocked unit tests), then exercised end-to-end against live **Postgres+pgvector**, **Redis**, **`OPENAI_API_KEY`**, and **`TMDB_READ_ACCESS_API_KEY`** per [`backend/VERIFICATION.md`](./VERIFICATION.md). Datastores stand up via the new root `docker-compose.yml`.
-> - [x] **Phase 0 `/health`** — `{"status":"ok","checks":{"db":"up","redis":"up"}}` 200 when both up; `degraded`/503 when Redis is down, and **auto-recovers** once Redis returns (Redis-client `maxRetries` fix).
+> - [x] **Phase 0 `/health`** — `{"status":"ok","checks":{"db":"up","redis":"up"}}` 200 when both up; `degraded`/503 when Redis is down, and **auto-recovers** (~2s) once Redis returns (self-healing Redis client that recreates the connection on failure — Bun's `autoReconnect`/`maxRetries` alone do **not** recover a wedged connection; see PR #23).
 > - [x] **Phase 2.2 `movies` migration** (`0001`) — applied live; rows insert/query; GIN index present (and now actually usable — see jsonb fix).
 > - [x] **Phase 3.1 pgvector migration** (`0002`) — `vector` 0.8.3 extension enabled; `embedding vector(1536)` + HNSW (cosine) index built.
 > - [x] **Phase 3.3 `source_hash` migration** (`0003`) — column added.
@@ -119,7 +119,7 @@ Known issues in the current code, to be resolved before building on top.
 
 ### Milestone 2.2: Database Schema (Drizzle)
 * [x] **`movies` table** (`src/db/schema.ts`): `id`, `tmdb_id` (unique), `title`, `overview`, `poster_path`, `backdrop_path`, `release_date`, `genres`/`keywords`/`metadata` (jsonb), timestamps. Migration `0001_add_movies.sql`. _Live apply pending a reachable Postgres._
-* [x] **GIN index** on `movies.metadata` (`movies_metadata_gin_idx`) for JSON containment queries.
+* [x] **GIN index** on `movies.genres` (`movies_genres_gin_idx`) for jsonb membership/containment queries (the `genres ? 'Action'` filter in `search_movies_sql`). _Swapped from `metadata` — which no query filters — in migration `0006`._
 * [x] **`embedding` column**: `vector(1536)` on `movies` — added in **Phase 3.1** (migration `0002`); populated by the ingestion pipeline (Phase 3.3).
 
 ---
