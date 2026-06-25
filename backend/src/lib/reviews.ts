@@ -123,11 +123,24 @@ export async function getRecentReviews(
     movieId: number,
     deps: ReviewDeps = defaultDeps(),
 ): Promise<ReviewEntry[]> {
-    const cached = await deps.cacheGetRecent(movieId)
+    let cached: ReviewEntry[] | null = null
+    try {
+        cached = await deps.cacheGetRecent(movieId)
+    } catch (err) {
+        // A cache read must never fail the request. Two cases land here: a key
+        // left in the OLD List representation reads as WRONGTYPE, and a Redis
+        // blip throws too. Fall back to Postgres (the source of truth); the
+        // hydrate below rewrites the key (SET overwrites any stale List), so the
+        // old representation self-heals on the first read.
+        console.warn('⚠️ recent-reviews cache read failed; falling back to Postgres:', err)
+    }
     if (cached) return cached
 
-    const all = await deps.dbListForMovie(movieId)
-    const recent = all.slice(0, RECENT_LIMIT)
-    await deps.cacheHydrateRecent(movieId, recent)
+    const recent = (await deps.dbListForMovie(movieId)).slice(0, RECENT_LIMIT)
+    try {
+        await deps.cacheHydrateRecent(movieId, recent)
+    } catch (err) {
+        console.warn('⚠️ recent-reviews cache hydrate failed; serving from Postgres:', err)
+    }
     return recent
 }

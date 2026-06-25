@@ -78,6 +78,23 @@ describe('getRecentReviews', () => {
         expect(calls.hydrate).toBe(1) // recent list rebuilt
     })
 
+    it('falls back to Postgres when the cache read throws (regression: WRONGTYPE / outage)', async () => {
+        // A key left in the old Redis List representation reads as WRONGTYPE, and
+        // a Redis blip throws too. Neither must 500 the request — getRecentReviews
+        // degrades to the DB, and the hydrate (which throws here too) is swallowed.
+        const { deps, calls } = fakeDeps({
+            cacheGetRecent: async () => {
+                throw new Error('WRONGTYPE Operation against a key holding the wrong kind of value')
+            },
+            cacheHydrateRecent: async () => {
+                throw new Error('still wedged')
+            },
+        })
+        const out = await getRecentReviews(5, deps)
+        expect(out.map((r) => r.id)).toEqual(['a', 'b']) // served from Postgres
+        expect(calls.dbList).toBe(1)
+    })
+
     it('caches a zero-review movie so repeat reads do not re-query Postgres (regression)', async () => {
         // Previously the cache stored nothing for an empty list and a read mapped
         // an absent key to "cold", so every read of a no-review movie was a cold
