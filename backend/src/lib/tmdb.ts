@@ -5,20 +5,23 @@ import type { paths } from './../../tmdb'
 // and the `./redis` re-export rather than 'bun' directly — both so tests can
 // stub the network and cache without mocking the whole 'bun' module.
 
-const TMDB_API_KEY = process.env.TMDB_READ_ACCESS_API_KEY
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 const TIL_CACHE = 3600
 
 async function fetchFromTMDB<T>(endpoint: string): Promise<T> {
-    if (!TMDB_API_KEY) {
-        throw new Error('TMDB_API_KEY is not defined')
+    // Read at call time (not module load) so the key can be provided after
+    // import — e.g. via dotenv, or set in tests — rather than captured as
+    // `undefined` when the module is first evaluated.
+    const apiKey = process.env.TMDB_READ_ACCESS_API_KEY
+    if (!apiKey) {
+        throw new Error('TMDB_READ_ACCESS_API_KEY is not defined')
     }
 
     const response = await fetch(`${TMDB_BASE_URL}${endpoint}`, {
         method: 'GET',
         headers: {
             accept: 'application/json',
-            Authorization: `Bearer ${TMDB_API_KEY}`,
+            Authorization: `Bearer ${apiKey}`,
         },
     })
 
