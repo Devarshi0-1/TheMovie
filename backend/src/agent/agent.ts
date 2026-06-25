@@ -6,6 +6,7 @@ import {
     type LanguageModelUsage,
     type UIMessage,
 } from 'ai'
+import { logUsage, normalizeUsage } from '../lib/usage'
 import { retrievalTools } from './tools'
 import { createUserTools } from './userTools'
 
@@ -78,11 +79,9 @@ function logChatFinish(
     usage: LanguageModelUsage,
 ): void {
     const paths = summarizeToolPaths(steps)
-    console.log(
-        `💬 chat done | retrieval=[${paths.join(', ') || 'none'}] | ` +
-            `tokens in=${usage.inputTokens ?? '?'} out=${usage.outputTokens ?? '?'} ` +
-            `cached=${usage.inputTokenDetails?.cacheReadTokens ?? 0}`,
-    )
+    logUsage('chat', AGENT_MODEL, normalizeUsage(usage), {
+        retrieval: paths.join('|') || 'none',
+    })
 }
 
 /**

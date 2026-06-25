@@ -1,6 +1,7 @@
 import { openai } from '@ai-sdk/openai'
 import { embedMany } from 'ai'
 import { redis } from './redis'
+import { logUsage } from './usage'
 
 // OpenAI `text-embedding-3-small` — 1536-dim vectors, matching the
 // `embedding vector(1536)` column on the `movies` table (Phase 3.1). Single AI
@@ -151,7 +152,16 @@ export async function embedTexts(
     }
 
     if (missingHashes.length === 0) {
-        console.log(`⚡ All ${uniqueHashes.length} embedding(s) served from cache`)
+        // Every unique text was cached — zero embedding spend (the cost win).
+        logUsage(
+            'embeddings',
+            EMBEDDING_MODEL,
+            { inputTokens: 0, totalTokens: 0 },
+            {
+                embedded: 0,
+                fromCache: uniqueHashes.length,
+            },
+        )
     } else {
         assertApiKey()
 
@@ -180,9 +190,15 @@ export async function embedTexts(
             ),
         )
 
-        console.log(
-            `🧠 Embedded ${missingTexts.length} text(s) (${tokens} tokens); ` +
-                `${uniqueHashes.length - missingHashes.length} from cache`,
+        // `embedded` vs `fromCache` makes redundant-embedding spend observable.
+        logUsage(
+            'embeddings',
+            EMBEDDING_MODEL,
+            { inputTokens: tokens, totalTokens: tokens },
+            {
+                embedded: missingTexts.length,
+                fromCache: uniqueHashes.length - missingHashes.length,
+            },
         )
     }
 

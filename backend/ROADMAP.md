@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 6.2 — AI cost & observability: confirm prompt caching (stable system prompt + tools first — already done in the agent/gates), per-request token/usage logging (in/out/cache), and embedding cost control (no redundant re-embedding). Mostly auditing/centralizing what's already in place. Then 6.3 DevOps (Docker, CI). _(✅ Phase 0 · ✅ Phase 1 · ✅ Phase 2 · ✅ Phase 3 · ✅ Phase 4 — full chat agent · ✅ Phase 5 — watchlist, reviews, recs · ✅ Phase 6.1 — rate limiting, secure headers, auth hardening, input validation. Pending: HITL confirmation UI (Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 6.3 — DevOps: Docker image (`FROM oven/bun:1-alpine`, `CMD ["bun", "run", "src/index.ts"]`) and CI (run backend `bun test` on every PR; frontend `vitest`/`oxlint`/`tsgo` once Phase 7 exists). _(✅ Phase 0–5 · ✅ Phase 6.1 security & limits · ✅ Phase 6.2 cost & observability. Pending: HITL confirmation UI (Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -201,10 +201,10 @@ The conversational window: natural-language movie discovery powered by a **Verce
 * [x] **Input validation** at the boundaries: chat (`ChatRequestSchema`), watchlist/review mutations (shared Zod), and the movies HTTP routes (`/search` query presence + length bound; numeric `:id` params). Agent tool inputs are Zod-validated by the AI SDK.
 * Tests: rate limiter (under/over limit, per-IP buckets, headers, fail-open), movies validation 400s, secure-headers presence. _Live Redis counters pending env._
 
-### Milestone 6.2: AI cost & observability
-* [ ] **Prompt caching**: keep the agent's stable system prompt + tool definitions at the start of the prompt so OpenAI's automatic prompt caching applies.
-* [ ] **Token/usage logging** per request (input/output/cache tokens) for cost tracking.
-* [ ] **Embedding cost control**: confirm no redundant re-embedding; monitor ingestion spend.
+### Milestone 6.2: AI cost & observability  _(complete)_
+* [x] **Prompt caching**: audited — every model call keeps its stable system prompt (and the agent's tool definitions) first, with volatile per-request content last (agent, intent gate, review summary, recommendations). `cached=` is now logged per call so cache hits are visible.
+* [x] **Token/usage logging** centralized in `src/lib/usage.ts` (`logUsage` + `normalizeUsage`): one parseable `📊 usage label=… model=… in/out/total/cached …` line per AI call, with call-specific meta (retrieval path, candidate count, intent). Adopted by the agent, intent gate, summary, recommendations, and embeddings.
+* [x] **Embedding cost control**: confirmed no redundant re-embedding (content-hash Redis cache + ingestion hash-skip); the embeddings usage log now reports `embedded` vs `fromCache` per batch so redundant spend (and the cache-hit ratio) is observable.
 
 ### Milestone 6.3: DevOps
 * [ ] **Docker image** `FROM oven/bun:1-alpine`, `CMD ["bun", "run", "src/index.ts"]`.
