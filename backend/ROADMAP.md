@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 4.3 — agent loop + streaming (`src/agent/agent.ts`): a `streamText` agent (`openai('gpt-5')`, `retrievalTools`, `stopWhen: stepCountIs(...)`) behind the intent gate, exposed at `POST /api/v1/chat` returning `toUIMessageStreamResponse()`. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embeddings + ingestion · ✅ Phase 4.1 intent gate · ✅ Phase 4.2 retrieval tiers — watchlist tools deferred to Phase 5.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 4.4 — state, memory & confirmation: persist per-user chat turns in Postgres (load prior messages per request, append via `streamText` `onFinish`) for multi-turn memory; gate chat-driven mutations on client confirmation (AI SDK human-in-the-loop tool pattern). _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embeddings + ingestion · ✅ Phase 4.1 intent gate · ✅ Phase 4.2 retrieval tiers — watchlist tools deferred to Phase 5 · ✅ Phase 4.3 agent loop + `/api/v1/chat`.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -14,6 +14,7 @@
 > - [ ] **Phase 3.3 ingestion run** — `bun run ingest --pages=1` against live TMDB + Postgres + `OPENAI_API_KEY`: confirm rows upsert with vectors, a re-run is a no-op (all skipped), and `--incremental` pulls now-playing.
 > - [ ] **Phase 4.1 intent gate** — call `runIntentGate` with a real `OPENAI_API_KEY`: confirm `gpt-5-mini` classifies a movie query as allowed and an off-topic/injection query as blocked, and that prompt-cache reads register in the usage log.
 > - [ ] **Phase 4.2 retrieval tiers** — against a seeded pgvector DB + live TMDB: confirm `search_movies_sql` filters, `semantic_search_movies` returns sensible cosine-ranked hits, and `fetch_from_tmdb` writes back so a repeat query is served locally.
+> - [ ] **Phase 4.3 chat endpoint** — `POST /api/v1/chat` (authenticated) with a real `OPENAI_API_KEY` + seeded DB: confirm gpt-5 streams a synthesized answer, tool/retrieval activity surfaces to `useChat`, a blocked query streams the refusal, and the `onFinish` log shows retrieval paths + token usage.
 
 ## 📦 Tech Stack
 
@@ -156,10 +157,11 @@ The conversational window: natural-language movie discovery powered by a **Verce
 * [x] Every tool defined with the AI SDK's **`tool({ inputSchema, execute })`** over shared **Zod** schemas (`src/schemas/movie.ts`), with **prescriptive descriptions** encoding cheapest-sufficient-first escalation (SQL → semantic → TMDB). Core logic is in `src/agent/retrieval.ts` (injectable deps), tools in `src/agent/tools.ts` (`retrievalTools`). _Verified offline (`retrieval.test.ts`, `tools.test.ts`, `movie.test.ts`); live pgvector kNN + TMDB pending env._
 * [x] **Fix:** `searchMovie` (`src/lib/tmdb.ts`) returned the results array on a cache miss but the whole response wrapper on a hit — now returns the array on both (regression test in `src/lib/tmdb.test.ts`). Also switched `tmdb.ts` to the `./redis` re-export + global `fetch` for testability.
 
-### Milestone 4.3: Agent loop + streaming
-* [ ] **`src/agent/agent.ts`**: a **`streamText`** agent — `model: openai('gpt-5')`, the retrieval tools, and a multi-step loop via `stopWhen: stepCountIs(...)`. The system prompt encodes cheapest-sufficient-first escalation; the pipeline (intent gate → tool-driven retrieval → synthesis) is plain TS control flow.
-* [ ] **`POST /api/v1/chat`** (authenticated): return `result.toUIMessageStreamResponse()` directly from Hono so the frontend `useChat` renders tokens + tool activity live. Validate the request body with a shared **Zod** schema.
-* [ ] **Log the retrieval path(s) taken** per request (sql / semantic / tmdb) alongside token usage (`usage`) for observability.
+### Milestone 4.3: Agent loop + streaming  _(complete; live model stream pending env)_
+* [x] **`src/agent/agent.ts`**: `runAgent(messages)` is a **`streamText`** agent — `model: openai('gpt-5')`, `retrievalTools`, multi-step loop via `stopWhen: stepCountIs(8)`. Stable system prompt (first, for prompt caching) encodes cheapest-sufficient-first escalation; the pipeline (intent gate → tool retrieval → synthesis) is plain TS control flow. Pure helpers `latestUserText` / `summarizeToolPaths` are unit-tested.
+* [x] **`POST /api/v1/chat`** (`src/routes/chat.ts`, authenticated via BetterAuth session): `handleChat` runs the intent gate first, then returns `runAgent(...).toUIMessageStreamResponse()` for allowed queries; blocked/empty queries get a **streamed refusal** (`createUIMessageStream`) so `useChat` renders it without ever invoking gpt-5. Body validated with the shared **Zod** `ChatRequestSchema`. Mounted in `app.ts`.
+* [x] **Log the retrieval path(s) taken** per request (which retrieval tools ran) alongside token usage (in/out/cached) via `streamText`'s `onFinish`.
+* [x] Gate→agent orchestration is injectable (`ChatDeps`) and unit-tested (`src/routes/chat.test.ts`): allowed→agent runs, blocked→refusal + agent skipped, empty→refusal without a gate call. _Live gpt-5 streaming + tool execution against a seeded DB pending env._
 
 ### Milestone 4.4: State, memory & confirmation
 * [ ] **Conversation memory**: persist per-user chat turns in Postgres — load prior messages on each request, append new turns via `streamText`'s `onFinish` — so multi-turn context ("the sci-fi one we discussed") works and conversations resume.
