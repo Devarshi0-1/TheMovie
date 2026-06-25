@@ -1,5 +1,6 @@
 import { openai } from '@ai-sdk/openai'
 import { generateObject } from 'ai'
+import { logUsage } from '../lib/usage'
 import {
     decideGate,
     IntentResultSchema,
@@ -92,10 +93,16 @@ export async function runIntentGate(
 
     const { result, usage } = await deps.classify(trimmed)
 
-    console.log(
-        `🚦 intent=${result.intent} relevant=${result.relevant} safe=${result.safe} ` +
-            `confidence=${result.confidence} | tokens in=${usage.inputTokens ?? '?'} ` +
-            `out=${usage.outputTokens ?? '?'} cached=${usage.cacheReadTokens ?? 0}`,
+    logUsage(
+        'intent',
+        INTENT_MODEL,
+        {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            totalTokens: usage.totalTokens,
+            cachedTokens: usage.cacheReadTokens,
+        },
+        { intent: result.intent, relevant: String(result.relevant), safe: String(result.safe) },
     )
 
     return decideGate(result)

@@ -4,6 +4,7 @@ import { and, cosineDistance, eq, isNotNull, notInArray, sql } from 'drizzle-orm
 import { db } from '../db'
 import { movies } from '../db/schema'
 import { getWatchlist } from './watchlist'
+import { logUsage, normalizeUsage } from './usage'
 import { RecommendationsSchema, type Recommendation } from '../schemas/recommendation'
 
 // "Because you watched X" recommendations: take the user's watched movies, find
@@ -101,10 +102,9 @@ function defaultDeps(): RecommendationDeps {
                     })),
                 }),
             })
-            console.log(
-                `🎯 recommendations | tokens in=${usage.inputTokens ?? '?'} ` +
-                    `out=${usage.outputTokens ?? '?'} cached=${usage.inputTokenDetails?.cacheReadTokens ?? 0}`,
-            )
+            logUsage('recommendations', RECOMMENDATION_MODEL, normalizeUsage(usage), {
+                candidates: candidates.length,
+            })
             return object.recommendations
         },
     }

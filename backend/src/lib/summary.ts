@@ -2,6 +2,7 @@ import { openai } from '@ai-sdk/openai'
 import { generateObject } from 'ai'
 import { redis } from './redis'
 import { getMovieReviews } from './tmdb'
+import { logUsage, normalizeUsage } from './usage'
 import { ReviewSummarySchema, type ReviewSummary } from '../schemas/movie'
 
 // Bounded summarization runs on the cheap model (a cost rule), and outputs are
@@ -62,11 +63,7 @@ function defaultDeps(): SummaryDeps {
                 system: SYSTEM_PROMPT,
                 prompt: reviewsText,
             })
-            console.log(
-                `📝 review summary | tokens in=${usage.inputTokens ?? '?'} ` +
-                    `out=${usage.outputTokens ?? '?'} ` +
-                    `cached=${usage.inputTokenDetails?.cacheReadTokens ?? 0}`,
-            )
+            logUsage('review-summary', SUMMARY_MODEL, normalizeUsage(usage))
             return object
         },
         cacheGet: (key) => redis.get(key),
