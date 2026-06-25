@@ -95,15 +95,20 @@ describe('summarizeToolPaths', () => {
 })
 
 describe('prepareAgentStep (forced synthesis on the final step)', () => {
-    it('leaves tool choice to the model on early steps (feature)', () => {
+    it('leaves tool choice to the model on every step before the last (feature)', () => {
         expect(prepareAgentStep({ stepNumber: 0 })).toEqual({})
+        // `stopWhen: stepCountIs(MAX_STEPS)` runs steps 0..MAX_STEPS-1, so the last
+        // EXECUTED step is index MAX_STEPS-1; MAX_STEPS-2 is still a normal step.
         expect(prepareAgentStep({ stepNumber: MAX_STEPS - 2 })).toEqual({})
     })
 
     it('disables tools on the final step so the model must answer (regression)', () => {
         // Without this, a query that escalates to many fetch_from_tmdb calls can
         // burn the whole step budget on tool calls and stream an empty answer.
+        // MAX_STEPS-1 is the actual final executed step.
         expect(prepareAgentStep({ stepNumber: MAX_STEPS - 1 })).toEqual({ toolChoice: 'none' })
+        // `>=` is defensive: a hypothetical overshoot step stays tool-disabled too
+        // (the loop stops before index MAX_STEPS would ever run).
         expect(prepareAgentStep({ stepNumber: MAX_STEPS })).toEqual({ toolChoice: 'none' })
     })
 })

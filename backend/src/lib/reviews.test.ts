@@ -11,7 +11,7 @@ const entry = (id: string, movieId = 5): ReviewEntry => ({
     createdAt: '2026-01-01T00:00:00.000Z',
 })
 
-const fakeDeps = (over: Partial<ReviewDeps> = {}) => {
+const fakeDeps = (over: Partial<ReviewDeps> = {}, dbRows?: ReviewEntry[]) => {
     const recent = new Map<number, ReviewEntry[]>()
     const calls = { upsert: 0, invalidate: 0, hydrate: 0, dbList: 0 }
     const deps: ReviewDeps = {
@@ -21,7 +21,7 @@ const fakeDeps = (over: Partial<ReviewDeps> = {}) => {
         },
         async dbListForMovie(movieId) {
             calls.dbList++
-            return [entry('a', movieId), entry('b', movieId)]
+            return dbRows ?? [entry('a', movieId), entry('b', movieId)]
         },
         async cacheInvalidateRecent(movieId) {
             calls.invalidate++
@@ -61,7 +61,7 @@ describe('upsertReview', () => {
 })
 
 describe('getRecentReviews', () => {
-    it('serves from the Redis List on a warm cache without hitting the DB (feature)', async () => {
+    it('serves from the cache on a warm hit without hitting the DB (feature)', async () => {
         const { deps, recent, calls } = fakeDeps()
         recent.set(5, [entry('cached')])
         const out = await getRecentReviews(5, deps)
@@ -75,6 +75,21 @@ describe('getRecentReviews', () => {
         const out = await getRecentReviews(5, deps)
         expect(out.map((r) => r.id)).toEqual(['a', 'b'])
         expect(calls.dbList).toBe(1)
-        expect(calls.hydrate).toBe(1) // membership list rebuilt
+        expect(calls.hydrate).toBe(1) // recent list rebuilt
+    })
+
+    it('caches a zero-review movie so repeat reads do not re-query Postgres (regression)', async () => {
+        // Previously the cache stored nothing for an empty list and a read mapped
+        // an absent key to "cold", so every read of a no-review movie was a cold
+        // miss that re-ran the DB query. Now an empty list is a real cache hit.
+        const { deps, calls } = fakeDeps({}, [])
+        const first = await getRecentReviews(7, deps)
+        expect(first).toEqual([])
+        expect(calls.dbList).toBe(1)
+        expect(calls.hydrate).toBe(1)
+
+        const second = await getRecentReviews(7, deps)
+        expect(second).toEqual([])
+        expect(calls.dbList).toBe(1) // unchanged: served from the cached empty list
     })
 })

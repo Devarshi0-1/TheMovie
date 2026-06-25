@@ -4,6 +4,7 @@ import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { auth } from './lib/auth'
 import { redis } from './lib/redis'
+import { withTimeout } from './lib/withTimeout'
 import { db } from './db'
 import { rateLimit } from './middleware/rateLimit'
 import chatRoute from './routes/chat'
@@ -62,31 +63,14 @@ app.route('/api/v1/watchlist', watchlistRoute)
 app.route('/api/v1/reviews', reviewsRoute)
 app.route('/api/v1/recommendations', recommendationsRoute)
 
-// Bound each dependency probe so an unreachable service reports `down`
-// quickly instead of hanging on a connection attempt. The rejection handler
-// on `work` ensures a late failure (after the timeout already won) stays
-// handled rather than surfacing as an unhandled rejection.
+// Bound each dependency probe (via the shared `withTimeout`) so an unreachable
+// service reports `down` quickly instead of hanging on a connection attempt.
 const HEALTH_TIMEOUT_MS = 1500
-
-const probe = (work: Promise<unknown>, ms: number): Promise<void> =>
-    new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('health check timed out')), ms)
-        work.then(
-            () => {
-                clearTimeout(timer)
-                resolve()
-            },
-            (err) => {
-                clearTimeout(timer)
-                reject(err)
-            },
-        )
-    })
 
 app.get('/health', async (c) => {
     const [dbResult, redisResult] = await Promise.allSettled([
-        probe(db.execute(sql`select 1`), HEALTH_TIMEOUT_MS),
-        probe(redis.ping(), HEALTH_TIMEOUT_MS),
+        withTimeout(db.execute(sql`select 1`), HEALTH_TIMEOUT_MS, 'db health check timed out'),
+        withTimeout(redis.ping(), HEALTH_TIMEOUT_MS, 'redis health check timed out'),
     ])
 
     if (dbResult.status === 'rejected') {

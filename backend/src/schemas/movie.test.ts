@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test'
 import {
     FetchFromTmdbInputSchema,
+    MovieDetailsInputSchema,
     MovieResultSchema,
+    ReviewSummaryInputSchema,
     ReviewSummarySchema,
     ScoredMovieResultSchema,
     SemanticSearchInputSchema,
@@ -62,6 +64,22 @@ describe('tool input schemas', () => {
 
     it('FetchFromTmdb defaults limit to 3 (feature)', () => {
         expect(FetchFromTmdbInputSchema.parse({ query: 'dune' }).limit).toBe(3)
+    })
+
+    it('FetchFromTmdb tolerates a tmdbId:0 placeholder alongside a query (regression)', () => {
+        // gpt-5 fills the optional tmdbId with 0; the schema must NOT reject it
+        // (retrieval.ts treats a non-positive id as absent so the query wins).
+        expect(FetchFromTmdbInputSchema.parse({ query: 'dune', tmdbId: 0 }).tmdbId).toBe(0)
+    })
+
+    it('required-id tools reject a 0/negative tmdbId at the boundary (regression)', () => {
+        // A 0 id 404s against TMDB; validate positivity at the Zod boundary
+        // rather than fetching movie id 0.
+        expect(MovieDetailsInputSchema.parse({ tmdbId: 27205 }).tmdbId).toBe(27205)
+        expect(() => MovieDetailsInputSchema.parse({ tmdbId: 0 })).toThrow()
+        expect(() => MovieDetailsInputSchema.parse({ tmdbId: -5 })).toThrow()
+        expect(ReviewSummaryInputSchema.parse({ tmdbId: 27205 }).tmdbId).toBe(27205)
+        expect(() => ReviewSummaryInputSchema.parse({ tmdbId: 0 })).toThrow()
     })
 
     it('Trending defaults limit to 10 (feature)', () => {
