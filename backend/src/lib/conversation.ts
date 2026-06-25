@@ -1,5 +1,5 @@
 import type { UIMessage } from 'ai'
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { chatMessage, conversation } from '../db/schema'
 
@@ -58,7 +58,11 @@ export const conversationStore: ConversationStore = {
             throw new Error('Conversation does not belong to the user')
         }
 
-        // onConflictDoNothing dedupes on message id (e.g. a retried request).
+        // Upsert on message id: dedupes retries, but also UPDATES `parts` so a
+        // HITL turn first saved with an unresolved (`input-available`) tool call
+        // is healed to the resolved (`output-available`) parts when the client
+        // re-posts after confirming — otherwise a later turn would reload a
+        // dangling tool call and the model request would be rejected.
         await db
             .insert(chatMessage)
             .values(
@@ -69,7 +73,14 @@ export const conversationStore: ConversationStore = {
                     parts: m.parts,
                 })),
             )
-            .onConflictDoNothing()
+            // Scope the heal to THIS conversation: a same-id row in another
+            // conversation is left untouched (defends the global `id` PK against
+            // a cross-conversation `parts` clobber).
+            .onConflictDoUpdate({
+                target: chatMessage.id,
+                set: { parts: sql`excluded.parts` },
+                where: eq(chatMessage.conversationId, conversationId),
+            })
 
         await db
             .update(conversation)

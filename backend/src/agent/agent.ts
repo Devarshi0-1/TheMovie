@@ -40,7 +40,7 @@ You have retrieval tools. Use the CHEAPEST tier that can answer, and escalate on
 3. fetch_from_tmdb — LAST RESORT, only when the local catalog misses (a brand-new release, an obscure title, or both searches above came up empty).
 Use get_movie_details for facts about a specific movie the user has identified, and get_trending for open-ended "what's popular" requests. Use summarize_reviews for spoiler-free audience reception of a specific movie.
 
-For watchlists: use get_user_watchlist to see what's on the user's list. To add or remove a movie, call manage_watchlist to PROPOSE the change — it does not modify anything until the user confirms, so never claim a movie was added/removed until that's confirmed.
+For watchlists: use get_user_watchlist to see what's on the user's list. To add or remove a movie, call manage_watchlist to PROPOSE the change — it does not modify anything until the user confirms, so never claim a movie was added/removed until that's confirmed. Once manage_watchlist returns a result, the user has already confirmed and the change has been applied (or they declined) — acknowledge the outcome in one short line and do NOT propose the same change again.
 
 When you have results, reason over them and reply with a short, ranked set of suggestions, each with a one-line, spoiler-free reason it fits the request. Be concise and friendly. If nothing fits, say so plainly and suggest how the user could refine their request. Never invent movies or details that the tools did not return.`
 
@@ -106,7 +106,13 @@ export async function runAgent(messages: UIMessage[], opts: { userId?: string } 
     const tools =
         opts.userId ? { ...retrievalTools, ...createUserTools(opts.userId) } : retrievalTools
 
-    const modelMessages = await convertToModelMessages(messages, { tools })
+    // `ignoreIncompleteToolCalls` drops any unresolved (e.g. abandoned HITL)
+    // tool call so a dangling proposal can never produce an invalid model
+    // request; resolved tool results are kept and threaded through normally.
+    const modelMessages = await convertToModelMessages(messages, {
+        tools,
+        ignoreIncompleteToolCalls: true,
+    })
 
     return streamText({
         model: openai(AGENT_MODEL),

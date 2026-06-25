@@ -19,3 +19,15 @@ export const ChatRequestSchema = z.object({
 })
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>
+
+// Composer-side validation for the chat input box (TanStack Form + Zod). Shared
+// so the same bounds describe a single user message everywhere.
+export const ChatMessageInputSchema = z.object({
+    message: z
+        .string()
+        .trim()
+        .min(1, 'Type a message first.')
+        .max(2000, 'Message is too long (max 2000 characters).'),
+})
+
+export type ChatMessageInput = z.infer<typeof ChatMessageInputSchema>
