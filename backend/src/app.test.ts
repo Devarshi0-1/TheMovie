@@ -45,4 +45,11 @@ describe('GET /ping', () => {
         expect(res.status).toBe(200)
         expect(await res.text()).toBe('pong')
     })
+
+    it('applies secure headers to responses (feature: Phase 6 hardening)', async () => {
+        const res = await app.request('/ping')
+        // secureHeaders sets nosniff + frame protection on every response.
+        expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+        expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN')
+    })
 })

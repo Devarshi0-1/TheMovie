@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 6.1 — Security & limits: Redis sliding-window rate limiting (tighter on `/api/v1/chat`), Hono `secureHeaders`, auth hardening (raise `minPasswordLength`, re-enable origin checks, review CORS), and input validation at every boundary. _(✅ Phase 0 · ✅ Phase 1 — auth hardening lands here · ✅ Phase 2 · ✅ Phase 3 · ✅ Phase 4 — full chat agent · ✅ Phase 5 — watchlist, reviews, personalized recs. Pending: HITL confirmation UI (Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 6.2 — AI cost & observability: confirm prompt caching (stable system prompt + tools first — already done in the agent/gates), per-request token/usage logging (in/out/cache), and embedding cost control (no redundant re-embedding). Mostly auditing/centralizing what's already in place. Then 6.3 DevOps (Docker, CI). _(✅ Phase 0 · ✅ Phase 1 · ✅ Phase 2 · ✅ Phase 3 · ✅ Phase 4 — full chat agent · ✅ Phase 5 — watchlist, reviews, recs · ✅ Phase 6.1 — rate limiting, secure headers, auth hardening, input validation. Pending: HITL confirmation UI (Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -19,6 +19,7 @@
 > - [ ] **Phase 4.5 review summary** — `GET /api/v1/movies/:id/summary` (and the `summarize_reviews` tool) with live TMDB + `OPENAI_API_KEY`: confirm a spoiler-free pros/cons/vibe summary returns, the no-reviews placeholder works, and a second call is served from the Redis cache.
 > - [ ] **Phase 5.1 watchlist** — over live DB + Redis: add/remove/list round-trips, `unique_user_movie` makes a re-add idempotent, `GET /:movieId/status` is correct (incl. cold-cache hydration), and another user can't see/mutate your list (auth).
 > - [ ] **Phase 5.2 reviews + recs** — apply migration `0005`; confirm review upsert + recent-list cache (and cold-hydrate); and that `GET /api/v1/recommendations` returns sensible "because you watched X" picks over a seeded pgvector catalog + `OPENAI_API_KEY`.
+> - [ ] **Phase 6.1 rate limiting** — against live Redis: confirm `/api/v1/chat` 429s after 15/min, `X-RateLimit-*`/`Retry-After` headers are set, counters reset after the window, and the limiter fails open when Redis is down.
 
 ## 📦 Tech Stack
 
@@ -105,7 +106,7 @@ Known issues in the current code, to be resolved before building on top.
 ### Milestone 1.2: Authentication (BetterAuth + Native)
 * [x] **BetterAuth** with Drizzle adapter, email/password (`src/lib/auth.ts`), mounted at `/api/auth/*`.
 * [x] **Session check** endpoint `/api/me`.
-* [ ] **Harden auth before production** (see Phase 6): raise `minPasswordLength`, re-enable origin checks, consider Redis-backed session storage with TTLs.
+* [x] **Harden auth before production** (done in Phase 6.1): raised `minPasswordLength` (4 → 8), re-enabled origin checks (removed `disableOriginCheck`), restricted CORS to an allow-list. _(Redis-backed session storage remains an optional future enhancement.)_
 
 ---
 
@@ -193,11 +194,12 @@ The conversational window: natural-language movie discovery powered by a **Verce
 
 ## 🚩 Phase 6: Production Hardening
 
-### Milestone 6.1: Security & limits
-* [ ] **Rate limiting**: sliding-window limiter using Redis `INCR` + `EXPIRE`. Apply tighter limits to the AI chat endpoint (it's the expensive one).
-* [ ] **Secure headers**: Hono `secureHeaders` middleware.
-* [ ] **Auth hardening**: raise `minPasswordLength`, re-enable origin checks, review CORS.
-* [ ] **Validate inputs** at every API boundary (chat prompts, search queries, watchlist mutations).
+### Milestone 6.1: Security & limits  _(complete; live rate-limit counters pending env)_
+* [x] **Rate limiting**: Redis `INCR` + `EXPIRE` fixed-window limiter (`src/middleware/rateLimit.ts`), keyed per client (forwarded IP) + route bucket, **fail-open** if Redis is down. Applied tightest to the AI chat endpoint: `/api/v1/chat` 15/min, `/api/v1/*` 120/min, `/api/auth/*` 30/5min. Emits `X-RateLimit-*` + `Retry-After`.
+* [x] **Secure headers**: Hono `secureHeaders()` middleware on every response (nosniff, frame-deny, referrer policy, …).
+* [x] **Auth hardening**: `minPasswordLength` 4 → 8; removed the dev-only `disableOriginCheck` so **origin checks are on** (trusted origins enforced); CORS restricted to an explicit allow-list (`FRONTEND_URL` + localhost) — never `*` with credentials. _(This also lands the Phase 1.2 "harden auth before production" item.)_
+* [x] **Input validation** at the boundaries: chat (`ChatRequestSchema`), watchlist/review mutations (shared Zod), and the movies HTTP routes (`/search` query presence + length bound; numeric `:id` params). Agent tool inputs are Zod-validated by the AI SDK.
+* Tests: rate limiter (under/over limit, per-IP buckets, headers, fail-open), movies validation 400s, secure-headers presence. _Live Redis counters pending env._
 
 ### Milestone 6.2: AI cost & observability
 * [ ] **Prompt caching**: keep the agent's stable system prompt + tool definitions at the start of the prompt so OpenAI's automatic prompt caching applies.
