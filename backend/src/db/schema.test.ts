@@ -132,6 +132,32 @@ describe('review schema', () => {
     })
 })
 
+describe('jsonb columns store native jsonb, not double-encoded strings (regression)', () => {
+    // Regression: drizzle-orm's stock `jsonb()` pre-`JSON.stringify`s its value and
+    // Bun's SQL driver then serializes it again, persisting a jsonb *string scalar*
+    // ("[\"Action\"]") instead of an array/object. Full-column drizzle reads
+    // round-trip (it JSON-parses on the way out) so the bug is invisible to unit
+    // tests, but every Postgres-side jsonb operation silently breaks — `@>`
+    // containment + GIN lookups return nothing, so e.g. search_movies_sql's genre
+    // filter never matches. The custom passthrough type must hand the raw JS value
+    // to the driver (mapToDriverValue is identity), letting it serialize once.
+    it('genres/keywords map arrays through untouched, not stringified (feature)', () => {
+        const genres = ['Action', 'Crime']
+        expect(movies.genres.mapToDriverValue(genres)).toEqual(genres)
+        expect(movies.keywords.mapToDriverValue(['superhero'])).toEqual(['superhero'])
+        // The stock-jsonb regression would hand the driver the string '["Action","Crime"]'.
+        expect(typeof movies.genres.mapToDriverValue(genres)).not.toBe('string')
+    })
+
+    it('metadata + chat_message.parts map objects/arrays through untouched (edge: nested)', () => {
+        const meta = { status: 'Released', genres: [{ id: 28, name: 'Action' }] }
+        expect(movies.metadata.mapToDriverValue(meta)).toEqual(meta)
+        const parts = [{ type: 'text', text: 'hi' }]
+        expect(chatMessage.parts.mapToDriverValue(parts)).toEqual(parts)
+        expect(typeof chatMessage.parts.mapToDriverValue(parts)).not.toBe('string')
+    })
+})
+
 describe('conversation + chat_message schema', () => {
     it('chat_message references conversation and carries jsonb parts (feature)', () => {
         const cfg = getTableConfig(chatMessage)

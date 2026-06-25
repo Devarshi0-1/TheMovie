@@ -1,14 +1,29 @@
 import {
     boolean,
+    customType,
     index,
     integer,
-    jsonb,
     pgTable,
     text,
     timestamp,
     unique,
     vector,
 } from 'drizzle-orm/pg-core'
+
+// Native jsonb that stores the JS value as real jsonb (array/object) instead of
+// a JSON-stringified scalar. drizzle-orm's stock `jsonb()` pre-`JSON.stringify`s
+// the value and Bun's SQL driver serializes it again, double-encoding the column:
+// full-column drizzle reads round-trip (drizzle JSON-parses on the way out), but
+// every Postgres-side jsonb operation silently breaks — `@>` containment, GIN
+// index lookups, `->`/`jsonb_array_elements`. Passing the value through untouched
+// lets the bun-sql driver serialize/parse it exactly once. (dataType stays
+// `jsonb`, so this is transparent to migrations.)
+const jsonbNative = <TData>(name: string) =>
+    customType<{ data: TData; driverData: unknown }>({
+        dataType: () => 'jsonb',
+        toDriver: (value: TData) => value as unknown,
+        fromDriver: (value: unknown) => value as TData,
+    })(name)
 
 export const user = pgTable('user', {
     id: text('id').primaryKey(),
@@ -110,9 +125,9 @@ export const movies = pgTable(
         posterPath: text('poster_path'),
         backdropPath: text('backdrop_path'),
         releaseDate: text('release_date'),
-        genres: jsonb('genres'),
-        keywords: jsonb('keywords'),
-        metadata: jsonb('metadata'),
+        genres: jsonbNative<string[]>('genres'),
+        keywords: jsonbNative<string[]>('keywords'),
+        metadata: jsonbNative<unknown>('metadata'),
         embedding: vector('embedding', { dimensions: 1536 }),
         // SHA-256 of the exact text that produced `embedding`. The ingestion
         // pipeline (Phase 3.3) compares this to skip re-embedding/re-writing
@@ -165,7 +180,7 @@ export const chatMessage = pgTable(
             .notNull()
             .references(() => conversation.id, { onDelete: 'cascade' }),
         role: text('role').notNull(),
-        parts: jsonb('parts').notNull(),
+        parts: jsonbNative<unknown>('parts').notNull(),
         createdAt: timestamp('created_at').notNull().defaultNow(),
     },
     (t) => [index('chat_message_conversation_idx').on(t.conversationId)],

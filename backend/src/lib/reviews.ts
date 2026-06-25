@@ -18,8 +18,8 @@ export interface ReviewDeps {
     dbUpsert(userId: string, input: ReviewInput): Promise<ReviewEntry>
     /** All reviews for a movie, newest first. */
     dbListForMovie(movieId: number): Promise<ReviewEntry[]>
-    /** Push an entry onto the movie's recent-reviews list, trimmed to RECENT_LIMIT. */
-    cachePushRecent(movieId: number, entry: ReviewEntry): Promise<void>
+    /** Drop the movie's recent-reviews cache so the next read re-hydrates from Postgres. */
+    cacheInvalidateRecent(movieId: number): Promise<void>
     /** Recent entries from the cache, or null if the list isn't populated (cold). */
     cacheGetRecent(movieId: number): Promise<ReviewEntry[] | null>
     /** Replace the recent-reviews list with these entries (newest first). */
@@ -58,9 +58,8 @@ function defaultDeps(): ReviewDeps {
             return rows.map(toEntry)
         },
 
-        async cachePushRecent(movieId, entry) {
-            await redis.lpush(recentKey(movieId), JSON.stringify(entry))
-            await redis.ltrim(recentKey(movieId), 0, RECENT_LIMIT - 1)
+        async cacheInvalidateRecent(movieId) {
+            await redis.del(recentKey(movieId))
         },
 
         async cacheGetRecent(movieId) {
@@ -102,7 +101,11 @@ export async function upsertReview(
     deps: ReviewDeps = defaultDeps(),
 ): Promise<ReviewEntry> {
     const entry = await deps.dbUpsert(userId, input)
-    await deps.cachePushRecent(input.movieId, entry)
+    // Invalidate (don't push): a review edit is an upsert, and pushing the new
+    // copy onto the list would leave the pre-edit copy behind as a stale
+    // duplicate. Dropping the key makes the next read re-hydrate from Postgres,
+    // which holds exactly one row per (user, movie).
+    await deps.cacheInvalidateRecent(input.movieId)
     return entry
 }
 

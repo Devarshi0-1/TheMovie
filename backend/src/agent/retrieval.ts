@@ -189,13 +189,20 @@ export async function fetchFromTmdb(
     input: FetchFromTmdbInput,
     deps: RetrievalDeps = defaultDeps(),
 ): Promise<MovieResult[]> {
-    if (!input.query && input.tmdbId === undefined) {
+    // A TMDB id counts as "provided" only when it's a positive integer. The agent
+    // (gpt-5) often fills the optional `tmdbId` with a `0` placeholder alongside a
+    // real `query`; treating `0` as a valid id (it `!== undefined`) would fetch the
+    // non-existent movie id 0 (404) and ignore the query. Require > 0 so the query
+    // path wins in that case.
+    const hasTmdbId = typeof input.tmdbId === 'number' && input.tmdbId > 0
+    const hasQuery = typeof input.query === 'string' && input.query.trim().length > 0
+    if (!hasQuery && !hasTmdbId) {
         throw new Error('fetch_from_tmdb requires a query or a tmdbId')
     }
 
     let details: MovieForIngest[]
-    if (input.tmdbId !== undefined) {
-        details = [await deps.tmdbDetail(input.tmdbId)]
+    if (hasTmdbId) {
+        details = [await deps.tmdbDetail(input.tmdbId!)]
     } else {
         const ids = (await deps.tmdbSearchIds(input.query!)).slice(0, input.limit)
         details = await Promise.all(ids.map((id) => deps.tmdbDetail(id)))

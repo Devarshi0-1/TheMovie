@@ -86,6 +86,12 @@ cd backend && docker build -t themovie-backend .
 docker run --rm -p 3000:3000 --env-file .env themovie-backend
 ```
 
+> ⚠️ `docker --env-file` does **not** strip quotes the way Bun's dotenv loader
+> does — keep `.env` values **unquoted** (as in `.env.example`), or a quoted
+> `DATABASE_URL="…"` reaches the process with the quotes and fails to parse as a
+> URL. To reach datastores running on the host from the container, add
+> `--network host` (so `localhost` resolves to the host).
+
 ✅ ROADMAP debt: **Phase 6.3** image build/run.
 
 ---
