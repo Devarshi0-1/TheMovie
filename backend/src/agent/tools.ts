@@ -2,10 +2,12 @@ import { tool } from 'ai'
 import {
     FetchFromTmdbInputSchema,
     MovieDetailsInputSchema,
+    ReviewSummaryInputSchema,
     SemanticSearchInputSchema,
     SqlSearchInputSchema,
     TrendingInputSchema,
 } from '../schemas/movie'
+import { summarizeReviews } from '../lib/summary'
 import {
     fetchFromTmdb,
     getMovieDetails,
@@ -65,6 +67,15 @@ const getTrendingTool = tool({
     execute: (input) => getTrending(input),
 })
 
+const summarizeReviewsTool = tool({
+    description:
+        'Summarize a SPECIFIC movie’s audience reviews into spoiler-free pros/cons and a one-line ' +
+        'vibe, by TMDB id. Use when the user asks what people think of a movie, its reception, or ' +
+        'whether it’s worth watching. Results are cached, so it’s cheap to call.',
+    inputSchema: ReviewSummaryInputSchema,
+    execute: (input) => summarizeReviews(input.tmdbId),
+})
+
 /** The retrieval toolset the agent loop exposes to gpt-5. */
 export const retrievalTools = {
     search_movies_sql: searchMoviesSqlTool,
@@ -72,6 +83,7 @@ export const retrievalTools = {
     fetch_from_tmdb: fetchFromTmdbTool,
     get_movie_details: getMovieDetailsTool,
     get_trending: getTrendingTool,
+    summarize_reviews: summarizeReviewsTool,
 }
 
 export type RetrievalToolName = keyof typeof retrievalTools

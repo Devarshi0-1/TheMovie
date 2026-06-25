@@ -72,3 +72,25 @@ export const TrendingInputSchema = z.object({
     limit: z.number().int().min(1).max(20).default(10).describe('Max trending movies to return.'),
 })
 export type TrendingInput = z.infer<typeof TrendingInputSchema>
+
+export const ReviewSummaryInputSchema = z.object({
+    tmdbId: z.number().int().describe('The TMDB movie id whose audience reviews to summarize.'),
+})
+export type ReviewSummaryInput = z.infer<typeof ReviewSummaryInputSchema>
+
+// Structured output of the review-summarization model call. Kept deliberately
+// small and spoiler-free; the same shape is returned for the no-reviews case.
+export const ReviewSummarySchema = z.object({
+    vibe: z
+        .string()
+        .describe(
+            'One short, spoiler-free sentence capturing the overall audience consensus/mood.',
+        ),
+    pros: z
+        .array(z.string())
+        .describe('Spoiler-free positives audiences mention (up to 5; empty if none).'),
+    cons: z
+        .array(z.string())
+        .describe('Spoiler-free criticisms audiences mention (up to 5; empty if none).'),
+})
+export type ReviewSummary = z.infer<typeof ReviewSummarySchema>

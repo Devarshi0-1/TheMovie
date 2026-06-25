@@ -172,3 +172,17 @@ export const getMovieForIngest = async (movieId: number): Promise<MovieForIngest
             `/movie/${movieId}?language=en-US&append_to_response=keywords`,
         ),
     )
+
+type MovieReviewsResponse =
+    paths['/3/movie/{movie_id}/reviews']['get']['responses']['200']['content']['application/json']
+
+// Returns just the review bodies (the text we summarize). Cached for an hour;
+// reviews accrue slowly, so a hit serving the same array on both paths is fine.
+export const getMovieReviews = async (movieId: number): Promise<string[]> => {
+    const data = await cacheList(`movie:${movieId}:reviews`, () =>
+        fetchFromTMDB<MovieReviewsResponse>(`/movie/${movieId}/reviews?language=en-US&page=1`),
+    )
+    return (data.results ?? [])
+        .map((r) => r.content)
+        .filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+}
