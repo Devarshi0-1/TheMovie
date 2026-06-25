@@ -7,7 +7,7 @@ import {
     type UIMessage,
 } from 'ai'
 import { retrievalTools } from './tools'
-import { createWatchlistTools } from './watchlistTools'
+import { createUserTools } from './userTools'
 
 // The reasoning agent runs gpt-5 (the expensive tier) — it only ever sees
 // queries the cheap intent gate already approved.
@@ -93,7 +93,7 @@ function logChatFinish(
 export async function runAgent(messages: UIMessage[], opts: { userId?: string } = {}) {
     // Watchlist tools are bound to the user; retrieval tools are stateless.
     const tools =
-        opts.userId ? { ...retrievalTools, ...createWatchlistTools(opts.userId) } : retrievalTools
+        opts.userId ? { ...retrievalTools, ...createUserTools(opts.userId) } : retrievalTools
 
     const modelMessages = await convertToModelMessages(messages, { tools })
 

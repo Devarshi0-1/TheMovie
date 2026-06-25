@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'bun:test'
-import { createWatchlistTools } from './watchlistTools'
+import { createUserTools } from './userTools'
 
-describe('createWatchlistTools', () => {
-    const tools = createWatchlistTools('user-1')
+describe('createUserTools', () => {
+    const tools = createUserTools('user-1')
 
-    it('exposes get_user_watchlist and manage_watchlist (feature)', () => {
-        expect(Object.keys(tools).sort()).toEqual(['get_user_watchlist', 'manage_watchlist'])
+    it('exposes watchlist + recommendation tools (feature)', () => {
+        expect(Object.keys(tools).sort()).toEqual([
+            'get_recommendations',
+            'get_user_watchlist',
+            'manage_watchlist',
+        ])
     })
 
-    it('get_user_watchlist auto-executes (read is safe) (feature)', () => {
+    it('read tools auto-execute (reads are safe) (feature)', () => {
         expect(typeof tools.get_user_watchlist.execute).toBe('function')
-        expect(tools.get_user_watchlist.description).toBeTruthy()
+        expect(typeof tools.get_recommendations.execute).toBe('function')
     })
 
     it('manage_watchlist has NO executor — mutations require confirmation (feature: HITL)', () => {

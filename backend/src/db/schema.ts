@@ -170,3 +170,30 @@ export const chatMessage = pgTable(
     },
     (t) => [index('chat_message_conversation_idx').on(t.conversationId)],
 )
+
+// User-authored movie reviews (Phase 5.2). One review per user per movie
+// (`unique_user_movie_review`), editable via upsert. Indexed by movie for the
+// per-movie reviews listing; recent reviews are also mirrored to a Redis List.
+export const review = pgTable(
+    'review',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => crypto.randomUUID()),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        movieId: integer('movie_id').notNull(),
+        rating: integer('rating'),
+        content: text('content').notNull(),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at')
+            .notNull()
+            .defaultNow()
+            .$onUpdate(() => new Date()),
+    },
+    (t) => [
+        unique('unique_user_movie_review').on(t.userId, t.movieId),
+        index('review_movie_idx').on(t.movieId),
+    ],
+)
