@@ -32,17 +32,20 @@ const fakeStore = (history: UIMessage[] | null = []) => {
     return { store, saved, loads }
 }
 
-// Fake agent: records the messages it ran on, and (like the real stream) fires
-// onFinish with a synthesized assistant message so persistence is exercised.
+// Fake agent: records the messages it ran on (and bound userId), and (like the
+// real stream) fires onFinish with a synthesized assistant message so
+// persistence is exercised.
 const fakeAgent = () => {
     const ran: UIMessage[][] = []
+    const userIds: (string | undefined)[] = []
     const assistant = {
         id: 'a1',
         role: 'assistant',
         parts: [{ type: 'text', text: 'here you go' }],
     } as UIMessage
-    const runAgent: ChatDeps['runAgent'] = async (messages) => {
+    const runAgent: ChatDeps['runAgent'] = async (messages, opts) => {
         ran.push(messages)
+        userIds.push(opts?.userId)
         return {
             toUIMessageStreamResponse: (options) => {
                 void options?.onFinish?.({ responseMessage: assistant })
@@ -52,7 +55,7 @@ const fakeAgent = () => {
             },
         }
     }
-    return { runAgent, ran, assistant }
+    return { runAgent, ran, userIds, assistant }
 }
 
 const makeDeps = (
@@ -92,6 +95,12 @@ describe('handleChat — agent path', () => {
         const res = await handleChat(ctx(), deps)
         expect(await res.text()).toBe('AGENT_STREAM')
         expect(agent.ran).toHaveLength(1)
+    })
+
+    it('binds the agent to the requesting user (feature: per-user watchlist tools)', async () => {
+        const { deps, agent } = makeDeps({ allowed: true, result: intentResult() })
+        await handleChat(ctx({ userId: 'user-42' }), deps)
+        expect(agent.userIds[0]).toBe('user-42')
     })
 
     it('prepends loaded history to the agent input (feature: multi-turn memory)', async () => {
