@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 4.4 — state, memory & confirmation: persist per-user chat turns in Postgres (load prior messages per request, append via `streamText` `onFinish`) for multi-turn memory; gate chat-driven mutations on client confirmation (AI SDK human-in-the-loop tool pattern). _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embeddings + ingestion · ✅ Phase 4.1 intent gate · ✅ Phase 4.2 retrieval tiers — watchlist tools deferred to Phase 5 · ✅ Phase 4.3 agent loop + `/api/v1/chat`.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 4.5 — review & synopsis summarization (`gpt-5-mini` summarizes TMDB reviews into spoiler-free pros/cons + a one-line vibe, cached in Redis as `movie:{id}:summary`), then Phase 5 user features. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embeddings + ingestion · ✅ Phase 4.1 intent gate · ✅ Phase 4.2 retrieval tiers — watchlist tools deferred to Phase 5 · ✅ Phase 4.3 agent loop + `/api/v1/chat` · ✅ Phase 4.4 conversation memory — HITL confirmation deferred to Phase 5.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -15,6 +15,7 @@
 > - [ ] **Phase 4.1 intent gate** — call `runIntentGate` with a real `OPENAI_API_KEY`: confirm `gpt-5-mini` classifies a movie query as allowed and an off-topic/injection query as blocked, and that prompt-cache reads register in the usage log.
 > - [ ] **Phase 4.2 retrieval tiers** — against a seeded pgvector DB + live TMDB: confirm `search_movies_sql` filters, `semantic_search_movies` returns sensible cosine-ranked hits, and `fetch_from_tmdb` writes back so a repeat query is served locally.
 > - [ ] **Phase 4.3 chat endpoint** — `POST /api/v1/chat` (authenticated) with a real `OPENAI_API_KEY` + seeded DB: confirm gpt-5 streams a synthesized answer, tool/retrieval activity surfaces to `useChat`, a blocked query streams the refusal, and the `onFinish` log shows retrieval paths + token usage.
+> - [ ] **Phase 4.4 conversation memory** — apply migration `0004`; over a live DB confirm turns persist, a follow-up request loads prior history (multi-turn context works), and another user can't read/append to someone else's conversation.
 
 ## 📦 Tech Stack
 
@@ -164,8 +165,8 @@ The conversational window: natural-language movie discovery powered by a **Verce
 * [x] Gate→agent orchestration is injectable (`ChatDeps`) and unit-tested (`src/routes/chat.test.ts`): allowed→agent runs, blocked→refusal + agent skipped, empty→refusal without a gate call. _Live gpt-5 streaming + tool execution against a seeded DB pending env._
 
 ### Milestone 4.4: State, memory & confirmation
-* [ ] **Conversation memory**: persist per-user chat turns in Postgres — load prior messages on each request, append new turns via `streamText`'s `onFinish` — so multi-turn context ("the sci-fi one we discussed") works and conversations resume.
-* [ ] **Human-in-the-loop confirmation**: gate chat-driven mutations (e.g. watchlist edits) on client approval via the AI SDK tool-confirmation pattern (`useChat` + `addToolResult`) before committing.
+* [x] **Conversation memory**: per-user chat turns persisted in Postgres (`conversation` + `chat_message` tables, migration `0004`). `handleChat` loads prior messages (`conversationStore.load`, ownership-checked) and runs the agent over `[...history, newTurn]`; new turns are appended via the stream's `onFinish` (`conversationStore.save`, creates the conversation if new, dedupes on message id). The conversation id is returned in an `X-Conversation-Id` header so the client can resume. Refusals persist the user+refusal turn too, keeping threads coherent. Store injectable; orchestration verified offline (`src/routes/chat.test.ts`), live DB persistence pending env.
+* [ ] **Human-in-the-loop confirmation**: gate chat-driven mutations (e.g. watchlist edits) on client approval via the AI SDK tool-confirmation pattern (`useChat` + `addToolResult`) before committing. **Deferred to Phase 5** — it gates the `manage_watchlist` tool, which needs the watchlist CRUD service (5.1); built alongside those tools.
 
 ### Milestone 4.5: Review & synopsis summarization
 * [ ] **Spoiler-free summaries**: GPT summarizes TMDB reviews into pros/cons + a one-line "vibe" per movie. Cache the summary in Redis keyed by `movie:{id}:summary`.

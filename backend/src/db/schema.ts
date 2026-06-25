@@ -131,3 +131,42 @@ export const movies = pgTable(
         index('movies_embedding_hnsw_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
     ],
 )
+
+// Per-user chat conversations — the multi-turn memory behind the agent. Each
+// request loads the conversation's prior messages so the agent has context
+// ("the sci-fi one we discussed"); new turns are appended via streamText's
+// onFinish (Phase 4.4).
+export const conversation = pgTable(
+    'conversation',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => crypto.randomUUID()),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        title: text('title'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at')
+            .notNull()
+            .defaultNow()
+            .$onUpdate(() => new Date()),
+    },
+    (t) => [index('conversation_user_idx').on(t.userId)],
+)
+
+// One row per chat message. `id` is the AI SDK UIMessage id; `parts` stores the
+// UIMessage parts jsonb verbatim so messages round-trip back into `useChat`.
+export const chatMessage = pgTable(
+    'chat_message',
+    {
+        id: text('id').primaryKey(),
+        conversationId: text('conversation_id')
+            .notNull()
+            .references(() => conversation.id, { onDelete: 'cascade' }),
+        role: text('role').notNull(),
+        parts: jsonb('parts').notNull(),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (t) => [index('chat_message_conversation_idx').on(t.conversationId)],
+)

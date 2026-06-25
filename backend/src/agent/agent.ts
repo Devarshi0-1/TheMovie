@@ -28,21 +28,35 @@ Use get_movie_details for facts about a specific movie the user has identified, 
 
 When you have results, reason over them and reply with a short, ranked set of suggestions, each with a one-line, spoiler-free reason it fits the request. Be concise and friendly. If nothing fits, say so plainly and suggest how the user could refine their request. Never invent movies or details that the tools did not return.`
 
+/** The most recent user message in the conversation, if any. */
+export function lastUserMessage(messages: UIMessage[]): UIMessage | undefined {
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') return messages[i]
+    }
+    return undefined
+}
+
+/** Concatenate a message's text parts (ignoring file/tool/reasoning parts). */
+export function textOfMessage(message: UIMessage): string {
+    return (message.parts ?? [])
+        .filter(
+            (p): p is { type: 'text'; text: string } =>
+                p.type === 'text' && typeof (p as { text?: unknown }).text === 'string',
+        )
+        .map((p) => p.text)
+        .join(' ')
+        .trim()
+}
+
 /** Extract the latest user message's text — what the intent gate classifies. */
 export function latestUserText(messages: UIMessage[]): string {
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const message = messages[i]
-        if (message.role !== 'user') continue
-        return (message.parts ?? [])
-            .filter(
-                (p): p is { type: 'text'; text: string } =>
-                    p.type === 'text' && typeof (p as { text?: unknown }).text === 'string',
-            )
-            .map((p) => p.text)
-            .join(' ')
-            .trim()
-    }
-    return ''
+    const message = lastUserMessage(messages)
+    return message ? textOfMessage(message) : ''
+}
+
+/** Build a minimal assistant UIMessage carrying a single text part. */
+export function assistantTextMessage(id: string, text: string): UIMessage {
+    return { id, role: 'assistant', parts: [{ type: 'text', text }] } as UIMessage
 }
 
 /** The distinct retrieval tools invoked across a run — logged for observability. */

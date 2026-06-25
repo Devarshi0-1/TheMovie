@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'bun:test'
 import type { UIMessage } from 'ai'
-import { handleChat, type ChatDeps } from './chat'
+import { handleChat, type ChatContext, type ChatDeps } from './chat'
+import type { ConversationStore } from '../lib/conversation'
 import type { GateDecision, IntentResult } from '../schemas/intent'
 
-const userMsg = (text: string): UIMessage =>
-    ({ id: '1', role: 'user', parts: [{ type: 'text', text }] }) as UIMessage
+const userMsg = (text: string, id = 'u1'): UIMessage =>
+    ({ id, role: 'user', parts: [{ type: 'text', text }] }) as UIMessage
 
 const intentResult = (over: Partial<IntentResult> = {}): IntentResult => ({
     intent: 'search',
@@ -15,51 +16,147 @@ const intentResult = (over: Partial<IntentResult> = {}): IntentResult => ({
     ...over,
 })
 
-// Injected gate + agent so the pipeline is tested with no OpenAI calls. The fake
-// agent returns a sentinel Response we can identify.
-const makeDeps = (decision: GateDecision) => {
-    const calls = { gate: 0, agent: 0 }
-    const deps: ChatDeps = {
-        async gate() {
-            calls.gate++
-            return decision
+// Fake store records loads/saves; seed history via `history`.
+const fakeStore = (history: UIMessage[] | null = []) => {
+    const saved: { conversationId: string; messages: UIMessage[] }[] = []
+    const loads: string[] = []
+    const store: ConversationStore = {
+        async load(_userId, conversationId) {
+            loads.push(conversationId)
+            return history
         },
-        async runAgent() {
-            calls.agent++
-            return { toUIMessageStreamResponse: () => new Response('AGENT_STREAM') }
+        async save(_userId, conversationId, messages) {
+            saved.push({ conversationId, messages })
         },
     }
-    return { deps, calls }
+    return { store, saved, loads }
 }
 
-describe('handleChat', () => {
-    it('runs the agent when the gate allows the query (feature)', async () => {
-        const { deps, calls } = makeDeps({ allowed: true, result: intentResult() })
-        const res = await handleChat([userMsg('sci-fi from 2010')], deps)
+// Fake agent: records the messages it ran on, and (like the real stream) fires
+// onFinish with a synthesized assistant message so persistence is exercised.
+const fakeAgent = () => {
+    const ran: UIMessage[][] = []
+    const assistant = {
+        id: 'a1',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'here you go' }],
+    } as UIMessage
+    const runAgent: ChatDeps['runAgent'] = async (messages) => {
+        ran.push(messages)
+        return {
+            toUIMessageStreamResponse: (options) => {
+                void options?.onFinish?.({ responseMessage: assistant })
+                return new Response('AGENT_STREAM', {
+                    headers: options?.headers,
+                })
+            },
+        }
+    }
+    return { runAgent, ran, assistant }
+}
+
+const makeDeps = (
+    decision: GateDecision,
+    opts: { history?: UIMessage[] | null } = {},
+): {
+    deps: ChatDeps
+    store: ReturnType<typeof fakeStore>
+    agent: ReturnType<typeof fakeAgent>
+    gateCalls: number[]
+} => {
+    const store = fakeStore(opts.history ?? [])
+    const agent = fakeAgent()
+    let idSeq = 0
+    const gateCalls: number[] = []
+    const deps: ChatDeps = {
+        async gate() {
+            gateCalls.push(1)
+            return decision
+        },
+        runAgent: agent.runAgent,
+        store: store.store,
+        generateId: () => `gen-${idSeq++}`,
+    }
+    return { deps, store, agent, gateCalls }
+}
+
+const ctx = (over: Partial<ChatContext> = {}): ChatContext => ({
+    userId: 'user-1',
+    messages: [userMsg('sci-fi from 2010')],
+    ...over,
+})
+
+describe('handleChat — agent path', () => {
+    it('runs the agent and streams its response when allowed (feature)', async () => {
+        const { deps, agent } = makeDeps({ allowed: true, result: intentResult() })
+        const res = await handleChat(ctx(), deps)
         expect(await res.text()).toBe('AGENT_STREAM')
-        expect(calls.gate).toBe(1)
-        expect(calls.agent).toBe(1)
+        expect(agent.ran).toHaveLength(1)
     })
 
+    it('prepends loaded history to the agent input (feature: multi-turn memory)', async () => {
+        const history = [
+            userMsg('earlier turn', 'old-u'),
+            { id: 'old-a', role: 'assistant', parts: [] } as UIMessage,
+        ]
+        const { deps, agent } = makeDeps({ allowed: true, result: intentResult() }, { history })
+        await handleChat(ctx({ conversationId: 'c1' }), deps)
+        // agent saw history + the new user message, in order.
+        expect(agent.ran[0].map((m) => m.id)).toEqual(['old-u', 'old-a', 'u1'])
+    })
+
+    it('persists the new user + assistant turn via onFinish (feature: append)', async () => {
+        const { deps, store } = makeDeps({ allowed: true, result: intentResult() })
+        await handleChat(ctx({ conversationId: 'c1' }), deps)
+        expect(store.saved).toHaveLength(1)
+        expect(store.saved[0].conversationId).toBe('c1')
+        expect(store.saved[0].messages.map((m) => m.role)).toEqual(['user', 'assistant'])
+    })
+
+    it('mints a conversation id when none is supplied and returns it in a header (edge)', async () => {
+        const { deps, store } = makeDeps({ allowed: true, result: intentResult() })
+        const res = await handleChat(ctx({ conversationId: undefined }), deps)
+        expect(res.headers.get('X-Conversation-Id')).toBe('gen-0')
+        expect(store.saved[0].conversationId).toBe('gen-0')
+    })
+})
+
+describe('handleChat — gate refusal path', () => {
     it('streams the refusal and skips the agent when blocked (feature: cost + safety)', async () => {
-        const { deps, calls } = makeDeps({
+        const { deps, agent } = makeDeps({
             allowed: false,
             result: intentResult({ intent: 'off_topic', relevant: false }),
             refusal: 'I only help with movies.',
         })
-        const res = await handleChat([userMsg('write me python')], deps)
-        expect(calls.agent).toBe(0) // expensive loop never runs
+        const res = await handleChat(ctx({ messages: [userMsg('write me python')] }), deps)
+        expect(agent.ran).toHaveLength(0) // expensive loop never runs
         expect(await res.text()).toContain('I only help with movies.')
     })
 
-    it('refuses an empty query without calling the gate or agent (edge: cost)', async () => {
-        const { deps, calls } = makeDeps({ allowed: true, result: intentResult() })
-        const emptyAssistantOnly = [
-            { id: '1', role: 'assistant', parts: [{ type: 'text', text: 'hi' }] } as UIMessage,
+    it('still persists the user + refusal turn (feature: coherent thread on resume)', async () => {
+        const { deps, store } = makeDeps({
+            allowed: false,
+            result: intentResult({ intent: 'injection', safe: false }),
+            refusal: 'No.',
+        })
+        await handleChat(ctx({ conversationId: 'c1' }), deps)
+        expect(store.saved[0].messages.map((m) => m.role)).toEqual(['user', 'assistant'])
+    })
+})
+
+describe('handleChat — empty query', () => {
+    it('refuses without calling the gate, agent, or store (edge: cost)', async () => {
+        const { deps, store, agent, gateCalls } = makeDeps({
+            allowed: true,
+            result: intentResult(),
+        })
+        const assistantOnly = [
+            { id: 'a', role: 'assistant', parts: [{ type: 'text', text: 'hi' }] } as UIMessage,
         ]
-        const res = await handleChat(emptyAssistantOnly, deps)
-        expect(calls.gate).toBe(0)
-        expect(calls.agent).toBe(0)
+        const res = await handleChat(ctx({ messages: assistantOnly }), deps)
+        expect(gateCalls).toHaveLength(0)
+        expect(agent.ran).toHaveLength(0)
+        expect(store.saved).toHaveLength(0)
         expect((await res.text()).length).toBeGreaterThan(0)
     })
 })
