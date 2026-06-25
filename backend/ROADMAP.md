@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 4.2 — tiered retrieval tools (`src/agent/tools.ts`): `search_movies_sql`, `semantic_search_movies` (query embed → pgvector cosine kNN), `fetch_from_tmdb` (write-back), each via the AI SDK's `tool({ inputSchema, execute })` with Zod schemas. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embeddings + ingestion · ✅ Phase 4.1 intent gate.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 4.3 — agent loop + streaming (`src/agent/agent.ts`): a `streamText` agent (`openai('gpt-5')`, `retrievalTools`, `stopWhen: stepCountIs(...)`) behind the intent gate, exposed at `POST /api/v1/chat` returning `toUIMessageStreamResponse()`. _(✅ Phase 0 · ✅ Phase 1 — auth hardening deferred to Phase 6 · ✅ Phase 2 · ✅ Phase 3 — pgvector + embeddings + ingestion · ✅ Phase 4.1 intent gate · ✅ Phase 4.2 retrieval tiers — watchlist tools deferred to Phase 5.)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -13,6 +13,7 @@
 > - [ ] **Phase 3.3 `source_hash` migration** (`0003`) — apply to a live DB; confirm the column adds.
 > - [ ] **Phase 3.3 ingestion run** — `bun run ingest --pages=1` against live TMDB + Postgres + `OPENAI_API_KEY`: confirm rows upsert with vectors, a re-run is a no-op (all skipped), and `--incremental` pulls now-playing.
 > - [ ] **Phase 4.1 intent gate** — call `runIntentGate` with a real `OPENAI_API_KEY`: confirm `gpt-5-mini` classifies a movie query as allowed and an off-topic/injection query as blocked, and that prompt-cache reads register in the usage log.
+> - [ ] **Phase 4.2 retrieval tiers** — against a seeded pgvector DB + live TMDB: confirm `search_movies_sql` filters, `semantic_search_movies` returns sensible cosine-ranked hits, and `fetch_from_tmdb` writes back so a repeat query is served locally.
 
 ## 📦 Tech Stack
 
@@ -146,12 +147,14 @@ The conversational window: natural-language movie discovery powered by a **Verce
 * [x] **Block** off-topic, abusive, and prompt-injection queries **before** the expensive `gpt-5` loop (safety + cost control), via `decideGate` → `{ allowed, refusal? }`. Blocks when `!relevant || !safe || intent ∈ {off_topic, injection}` (relevant/safe treated as authoritative — defense in depth); empty queries short-circuit without a model call. Returns a friendly, non-echoing refusal.
 * [x] **Shared Zod schema** in `src/schemas/intent.ts` (`IntentResultSchema` + `INTENTS` + pure `isBlocked`/`refusalFor`/`decideGate`). _Defined in the backend for now; lifts to `packages/schemas/` in Phase 7.1 when the frontend is a second consumer (deferred to avoid repo-wide workspace infra ahead of need)._ Verified offline (`src/schemas/intent.test.ts` + `src/agent/intent.test.ts`); live `gpt-5-mini` call pending a real `OPENAI_API_KEY`.
 
-### Milestone 4.2: Retrieval tools (tiered)
-* [ ] **`search_movies_sql`**: structured/exact lookups (title, genre, year) against Postgres. Cheapest, most precise — the agent's first choice for concrete queries.
-* [ ] **`semantic_search_movies`**: embed the query (OpenAI) → cosine kNN against `movies.embedding` (pgvector, via Drizzle) → top matches. Answers conceptual queries like *"hero later becomes the villain."*
-* [ ] **`fetch_from_tmdb`**: last-resort lookup on a local-catalog miss; on a hit, **write back** (upsert + embed) so the catalog self-heals.
-* [ ] **`get_movie_details`** / **`get_trending`** / **`manage_watchlist`** / **`get_user_watchlist`**: wrap existing services / Phase 5 user features.
-* [ ] Define every tool with the AI SDK's **`tool({ inputSchema, execute })`** using **Zod** schemas, and write **prescriptive descriptions** stating *when* to call each (prefer cheapest sufficient tier; escalate only on insufficient results).
+### Milestone 4.2: Retrieval tools (tiered)  _(retrieval tiers complete; watchlist tools deferred to Phase 5; live DB/API pending env)_
+* [x] **`search_movies_sql`**: structured/exact lookups (title ILIKE, genre jsonb-containment, year prefix) against Postgres; returns `[]` when no filter is given so the agent escalates. Cheapest, most precise.
+* [x] **`semantic_search_movies`**: `embedText(query)` → `cosineDistance(movies.embedding, vec)` kNN (Drizzle, ascending distance over the HNSW index) → top matches with `similarity = 1 - distance`.
+* [x] **`fetch_from_tmdb`**: last-resort lookup by `query` or `tmdbId`; maps the TMDB detail to the result and **writes back** (`ingestMovies` → upsert + embed) best-effort so the catalog self-heals without failing the answer.
+* [x] **`get_movie_details`** / **`get_trending`**: wrap the TMDB detail/trending services.
+* [ ] **`manage_watchlist`** / **`get_user_watchlist`**: **deferred to Phase 5** — these need the watchlist CRUD service (5.1) and per-user auth context, which don't exist yet. The agent loop (4.3) wires the toolset and these slot in when 5.1 lands.
+* [x] Every tool defined with the AI SDK's **`tool({ inputSchema, execute })`** over shared **Zod** schemas (`src/schemas/movie.ts`), with **prescriptive descriptions** encoding cheapest-sufficient-first escalation (SQL → semantic → TMDB). Core logic is in `src/agent/retrieval.ts` (injectable deps), tools in `src/agent/tools.ts` (`retrievalTools`). _Verified offline (`retrieval.test.ts`, `tools.test.ts`, `movie.test.ts`); live pgvector kNN + TMDB pending env._
+* [x] **Fix:** `searchMovie` (`src/lib/tmdb.ts`) returned the results array on a cache miss but the whole response wrapper on a hit — now returns the array on both (regression test in `src/lib/tmdb.test.ts`). Also switched `tmdb.ts` to the `./redis` re-export + global `fetch` for testability.
 
 ### Milestone 4.3: Agent loop + streaming
 * [ ] **`src/agent/agent.ts`**: a **`streamText`** agent — `model: openai('gpt-5')`, the retrieval tools, and a multi-step loop via `stopWhen: stepCountIs(...)`. The system prompt encodes cheapest-sufficient-first escalation; the pipeline (intent gate → tool-driven retrieval → synthesis) is plain TS control flow.

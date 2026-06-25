@@ -1,5 +1,9 @@
-import { fetch, redis } from 'bun'
+import { redis } from './redis'
 import type { paths } from './../../tmdb'
+
+// Use the global `fetch` (Bun provides it) rather than importing it from 'bun',
+// and the `./redis` re-export rather than 'bun' directly — both so tests can
+// stub the network and cache without mocking the whole 'bun' module.
 
 const TMDB_API_KEY = process.env.TMDB_READ_ACCESS_API_KEY
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
@@ -59,7 +63,12 @@ export const getTrendingMovies = async (): Promise<TrendingMovies> => {
 type SearchMovieResponse =
     paths['/3/search/movie']['get']['responses']['200']['content']['application/json']
 
-export const searchMovie = async (query: string) => {
+type SearchMovies = NonNullable<SearchMovieResponse['results']>
+
+// Returns the search results array on BOTH cache hit and miss (the cache stores
+// the same `results` array we return, so the shape never differs). Mirrors the
+// getTrendingMovies fix from Phase 0.
+export const searchMovie = async (query: string): Promise<SearchMovies> => {
     const normalizedQuery = query.trim().toLowerCase()
 
     const cachedKey = `search:${normalizedQuery}`
@@ -68,7 +77,7 @@ export const searchMovie = async (query: string) => {
 
     if (cachedData) {
         console.log('⚡ HIT: Serving Search Results from Redis')
-        return JSON.parse(cachedData) as SearchMovieResponse
+        return JSON.parse(cachedData) as SearchMovies
     }
 
     console.log(`🐢 MISS: Searching TMDB for "${query}"`)
@@ -77,11 +86,13 @@ export const searchMovie = async (query: string) => {
         `/search/movie?query=${normalizedQuery}&include_adult=false&language=en-US&page=1`,
     )
 
-    await redis.set(cachedKey, JSON.stringify(searchResult))
+    const results = searchResult.results ?? []
+
+    await redis.set(cachedKey, JSON.stringify(results))
 
     await redis.expire(cachedKey, TIL_CACHE)
 
-    return searchResult.results
+    return results
 }
 
 type MovieDetailsResponse =
