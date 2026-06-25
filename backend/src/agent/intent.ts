@@ -6,7 +6,7 @@ import {
     IntentResultSchema,
     type GateDecision,
     type IntentResult,
-} from '../schemas/intent'
+} from '@themovie/schemas'
 
 // Cheap, bounded classifier model by design — the intent gate is both a safety
 // boundary and a cost control, so it must never use the expensive gpt-5 agent.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { runIntentGate, type IntentDeps } from './intent'
-import type { IntentResult } from '../schemas/intent'
+import type { IntentResult } from '@themovie/schemas'
 
 // Injected classifier — the gate is tested without any OpenAI call. Records the
 // queries it was asked to classify so we can assert it is (or isn't) invoked.

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { auth } from '../lib/auth'
 import { addToWatchlist, getWatchlist, isInWatchlist, removeFromWatchlist } from '../lib/watchlist'
-import { WatchlistAddSchema } from '../schemas/watchlist'
+import { WatchlistAddSchema } from '@themovie/schemas'
 
 const watchlistRoute = new Hono<{ Variables: { userId: string } }>()
 

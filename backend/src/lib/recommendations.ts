@@ -5,7 +5,7 @@ import { db } from '../db'
 import { movies } from '../db/schema'
 import { getWatchlist } from './watchlist'
 import { logUsage, normalizeUsage } from './usage'
-import { RecommendationsSchema, type Recommendation } from '../schemas/recommendation'
+import { RecommendationsSchema, type Recommendation } from '@themovie/schemas'
 
 // "Because you watched X" recommendations: take the user's watched movies, find
 // the nearest movies by embedding (pgvector kNN) per seed, merge into a

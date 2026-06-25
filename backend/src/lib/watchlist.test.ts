@@ -6,7 +6,7 @@ import {
     removeFromWatchlist,
     type WatchlistDeps,
 } from './watchlist'
-import type { WatchlistEntry } from '../schemas/watchlist'
+import type { WatchlistEntry } from '@themovie/schemas'
 
 const entry = (movieId: number): WatchlistEntry => ({
     movieId,

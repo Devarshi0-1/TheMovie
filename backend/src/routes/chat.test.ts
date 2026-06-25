@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import type { UIMessage } from 'ai'
 import { handleChat, type ChatContext, type ChatDeps } from './chat'
 import type { ConversationStore } from '../lib/conversation'
-import type { GateDecision, IntentResult } from '../schemas/intent'
+import type { GateDecision, IntentResult } from '@themovie/schemas'
 
 const userMsg = (text: string, id = 'u1'): UIMessage =>
     ({ id, role: 'user', parts: [{ type: 'text', text }] }) as UIMessage

@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../db'
 import { review } from '../db/schema'
 import { redis } from './redis'
-import type { ReviewEntry, ReviewInput } from '../schemas/review'
+import type { ReviewEntry, ReviewInput } from '@themovie/schemas'
 
 // User reviews. Postgres is the source of truth (one review per user/movie,
 // editable via upsert); the most recent reviews per movie are mirrored to a

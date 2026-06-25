@@ -6,7 +6,7 @@ import {
     SemanticSearchInputSchema,
     SqlSearchInputSchema,
     TrendingInputSchema,
-} from '../schemas/movie'
+} from '@themovie/schemas'
 import { summarizeReviews } from '../lib/summary'
 import {
     fetchFromTmdb,

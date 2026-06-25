@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { getRecentReviews, upsertReview, type ReviewDeps } from './reviews'
-import type { ReviewEntry } from '../schemas/review'
+import type { ReviewEntry } from '@themovie/schemas'
 
 const entry = (id: string, movieId = 5): ReviewEntry => ({
     id,

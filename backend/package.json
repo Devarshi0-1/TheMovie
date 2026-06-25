@@ -13,6 +13,7 @@
     },
     "dependencies": {
         "@ai-sdk/openai": "^3.0.74",
+        "@themovie/schemas": "workspace:*",
         "ai": "^6.0.209",
         "better-auth": "^1.4.9",
         "dotenv": "^17.2.3",
