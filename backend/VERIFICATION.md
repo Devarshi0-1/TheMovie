@@ -21,7 +21,7 @@ bun install
 bun run db:migrate         # applies 0000 → 0005 (pgvector extension + HNSW/GIN indexes)
 ```
 
-✅ Expect: migrations apply cleanly; `\dx` shows `vector`; `\d movies` shows the `embedding vector(1536)` column, `movies_embedding_hnsw_idx`, `movies_metadata_gin_idx`. (ROADMAP debt: Phase 2.2 / 3.1 / 3.3 / 4.4 / 5.2 migrations.)
+✅ Expect: migrations apply cleanly; `\dx` shows `vector`; `\d movies` shows the `embedding vector(1536)` column, `movies_embedding_hnsw_idx`, `movies_genres_gin_idx`. (ROADMAP debt: Phase 2.2 / 3.1 / 3.3 / 4.4 / 5.2 migrations.)
 
 ## 2. Start + health
 
