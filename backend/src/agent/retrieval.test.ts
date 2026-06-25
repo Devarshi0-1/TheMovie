@@ -11,7 +11,7 @@ import {
 import { db } from '../db'
 import { movies } from '../db/schema'
 import type { MovieForIngest } from '../lib/tmdb'
-import type { ScoredMovieResult } from '../schemas/movie'
+import type { ScoredMovieResult } from '@themovie/schemas'
 
 describe('genreContains (genre filter binds a jsonb membership test, not a string scalar)', () => {
     it('binds the bare genre name and never the double-encoded array string (regression)', () => {

@@ -3,7 +3,7 @@ import { generateObject } from 'ai'
 import { redis } from './redis'
 import { getMovieReviews } from './tmdb'
 import { logUsage, normalizeUsage } from './usage'
-import { ReviewSummarySchema, type ReviewSummary } from '../schemas/movie'
+import { ReviewSummarySchema, type ReviewSummary } from '@themovie/schemas'
 
 // Bounded summarization runs on the cheap model (a cost rule), and outputs are
 // cached in Redis so we never re-summarize the same reviews (see CLAUDE.md).

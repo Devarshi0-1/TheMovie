@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { auth } from '../lib/auth'
 import { getRecentReviews, upsertReview } from '../lib/reviews'
-import { ReviewInputSchema } from '../schemas/review'
+import { ReviewInputSchema } from '@themovie/schemas'
 
 const reviewsRoute = new Hono<{ Variables: { userId: string } }>()
 

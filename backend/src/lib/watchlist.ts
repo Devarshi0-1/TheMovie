@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../db'
 import { watchlist } from '../db/schema'
 import { redis } from './redis'
-import type { WatchlistAdd, WatchlistEntry } from '../schemas/watchlist'
+import type { WatchlistAdd, WatchlistEntry } from '@themovie/schemas'
 
 // Watchlist persistence. Postgres is the source of truth (respecting the
 // `unique_user_movie` constraint); a Redis Set per user mirrors membership for

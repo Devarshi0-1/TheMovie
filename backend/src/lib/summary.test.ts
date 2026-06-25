@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { summarizeReviews, type SummaryDeps } from './summary'
-import type { ReviewSummary } from '../schemas/movie'
+import type { ReviewSummary } from '@themovie/schemas'
 
 const summary: ReviewSummary = {
     vibe: 'A tense, well-acted thriller.',

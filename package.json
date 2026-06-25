@@ -1,0 +1,12 @@
+{
+    "name": "themovie",
+    "private": true,
+    "workspaces": [
+        "backend",
+        "packages/*"
+    ],
+    "scripts": {
+        "test": "bun test",
+        "typecheck": "bun run --filter '*' typecheck"
+    }
+}

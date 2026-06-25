@@ -19,7 +19,7 @@ import type {
     SemanticSearchInput,
     SqlSearchInput,
     TrendingInput,
-} from '../schemas/movie'
+} from '@themovie/schemas'
 
 // The three retrieval tiers + details/trending, as plain functions with all IO
 // behind injectable `deps` so each is unit-tested without a live DB / OpenAI /

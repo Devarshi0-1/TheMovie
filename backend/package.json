@@ -13,11 +13,13 @@
     },
     "dependencies": {
         "@ai-sdk/openai": "^3.0.74",
+        "@themovie/schemas": "workspace:*",
         "ai": "^6.0.209",
         "better-auth": "^1.4.9",
         "dotenv": "^17.2.3",
         "drizzle-orm": "^0.45.1",
-        "hono": "^4.11.3"
+        "hono": "^4.11.3",
+        "zod": "^4.1.8"
     },
     "devDependencies": {
         "@types/bun": "latest",

@@ -4,8 +4,8 @@ import { assistantTextMessage, lastUserMessage, runAgent, textOfMessage } from '
 import { runIntentGate } from '../agent/intent'
 import { auth } from '../lib/auth'
 import { conversationStore, type ConversationStore } from '../lib/conversation'
-import { ChatRequestSchema } from '../schemas/chat'
-import type { GateDecision } from '../schemas/intent'
+import { ChatRequestSchema } from '@themovie/schemas'
+import type { GateDecision } from '@themovie/schemas'
 
 // Stream a single assistant text message (the intent-gate refusal) as a UI
 // message stream, so `useChat` renders it exactly like a normal reply — without

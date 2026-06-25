@@ -2,7 +2,7 @@ import { tool } from 'ai'
 import { z } from 'zod'
 import { recommendForUser } from '../lib/recommendations'
 import { getWatchlist } from '../lib/watchlist'
-import { ManageWatchlistInputSchema } from '../schemas/watchlist'
+import { ManageWatchlistInputSchema } from '@themovie/schemas'
 
 // Per-user agent tools — bound to the authenticated user, so they're built per
 // request rather than living as module singletons like the (stateless)
