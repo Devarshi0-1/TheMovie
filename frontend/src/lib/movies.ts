@@ -1,5 +1,13 @@
-import { MovieResultSchema, type MovieResult } from '@themovie/schemas'
+import { queryOptions } from '@tanstack/react-query'
+import {
+    MovieResultSchema,
+    ReviewSummarySchema,
+    type MovieResult,
+    type ReviewSummary,
+} from '@themovie/schemas'
 import { z } from 'zod'
+import { apiFetch } from './api'
+import { parseMovieDetails, parseMovieList, type DetailMovie } from './tmdb'
 
 // The frontend validates every movie payload it receives against the SAME Zod
 // schema the backend uses for API responses and AI tool I/O. One definition in
@@ -39,9 +47,60 @@ export function releaseYear(movie: MovieResult): string {
     return movie.releaseDate.slice(0, 4)
 }
 
-// A small, schema-valid sample so the scaffold landing page renders real,
-// validated data with no backend wired up yet (Phase 7.2 swaps this for live
-// `GET /api/v1/movies/...` calls through TanStack Query).
+// ── Live movie queries (TanStack Query) ─────────────────────────────────────
+// The movie endpoints proxy TMDB and return TMDB's raw snake_case shapes, so
+// every queryFn pipes the response through the `tmdb` mapper to land on the
+// shared `MovieResult` / detail display shapes. Trending is SSR-prefetched in
+// the discovery route loader; the rest resolve on demand.
+
+export async function fetchTrending(): Promise<MovieResult[]> {
+    return parseMovieList(await apiFetch('/api/v1/movies/trending'))
+}
+
+export const trendingMoviesQueryOptions = queryOptions({
+    queryKey: ['movies', 'trending'] as const,
+    queryFn: fetchTrending,
+})
+
+export async function searchMovies(query: string): Promise<MovieResult[]> {
+    return parseMovieList(await apiFetch(`/api/v1/movies/search?q=${encodeURIComponent(query)}`))
+}
+
+export function searchMoviesQueryOptions(query: string) {
+    const q = query.trim()
+    return queryOptions({
+        queryKey: ['movies', 'search', q] as const,
+        queryFn: () => searchMovies(q),
+        // No query → no request; the discovery grid falls back to trending.
+        enabled: q.length > 0,
+    })
+}
+
+export async function fetchMovieDetails(id: number): Promise<DetailMovie> {
+    return parseMovieDetails(await apiFetch(`/api/v1/movies/${id}`))
+}
+
+export function movieDetailsQueryOptions(id: number) {
+    return queryOptions({
+        queryKey: ['movies', 'details', id] as const,
+        queryFn: () => fetchMovieDetails(id),
+    })
+}
+
+export async function fetchMovieSummary(id: number): Promise<ReviewSummary> {
+    return ReviewSummarySchema.parse(await apiFetch(`/api/v1/movies/${id}/summary`))
+}
+
+export function movieSummaryQueryOptions(id: number) {
+    return queryOptions({
+        queryKey: ['movies', 'summary', id] as const,
+        queryFn: () => fetchMovieSummary(id),
+        // Summaries are an LLM call cached server-side for days; don't refetch eagerly.
+        staleTime: 60 * 60_000,
+    })
+}
+
+// A small, schema-valid sample retained for tests and as a typed fixture.
 export const SAMPLE_FEATURED: MovieResult[] = parseMovies([
     {
         tmdbId: 27205,

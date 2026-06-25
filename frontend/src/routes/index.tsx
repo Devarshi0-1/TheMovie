@@ -1,70 +1,90 @@
-import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
-import { MovieCard } from '../components/MovieCard'
-import { parseMovies, SAMPLE_FEATURED } from '../lib/movies'
+import { useQuery } from '@tanstack/react-query'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
+import { z } from 'zod'
+import { MovieGrid } from '../components/MovieGrid'
+import { SearchBar } from '../components/SearchBar'
+import { searchMoviesQueryOptions, trendingMoviesQueryOptions } from '../lib/movies'
 
-// A real TanStack Query query, prefetched in the route loader and read in the
-// component. The queryFn validates with the shared schema before the data ever
-// reaches React. Phase 7.2 swaps the queryFn for a `fetch('/api/v1/movies/...')`
-// — the wiring (loader → ensureQueryData → useSuspenseQuery) stays identical.
-const featuredMoviesQuery = queryOptions({
-    queryKey: ['movies', 'featured'],
-    queryFn: () => parseMovies(SAMPLE_FEATURED),
-})
+// `?q=` drives search; absent → trending. The trending grid is SSR-prefetched in
+// the loader (the same loader → ensureQueryData → useSuspenseQuery path the
+// scaffold proved), while search resolves on the client as the user queries.
+const searchSchema = z.object({ q: z.string().optional() })
 
 export const Route = createFileRoute('/')({
-    loader: ({ context }) => context.queryClient.ensureQueryData(featuredMoviesQuery),
-    component: Home,
+    validateSearch: searchSchema,
+    // Best-effort SSR prefetch: `prefetchQuery` never throws, so a transient
+    // trending outage degrades to the grid's error state instead of crashing
+    // the whole discovery page (the hero + search must always render).
+    loader: ({ context }) => context.queryClient.prefetchQuery(trendingMoviesQueryOptions),
+    component: Discover,
 })
 
-const RETRIEVAL_TIERS = [
-    {
-        name: 'SQL search',
-        blurb: 'Structured, exact intent — a title, a genre, a year. Cheapest tier.',
-    },
-    {
-        name: 'Semantic search',
-        blurb: 'Themes keywords can’t capture — “a hero who becomes the villain”. pgvector kNN.',
-    },
-    {
-        name: 'TMDB fallback',
-        blurb: 'Brand-new or obscure titles. On a hit, the catalog self-heals for next time.',
-    },
-]
+function Discover() {
+    const { q } = Route.useSearch()
+    const navigate = useNavigate({ from: '/' })
+    const [draft, setDraft] = useState(q ?? '')
 
-function Home() {
-    const { data: featured } = useSuspenseQuery(featuredMoviesQuery)
+    const trending = useQuery(trendingMoviesQueryOptions)
+    const search = useQuery(searchMoviesQueryOptions(q ?? ''))
+
+    const committed = q?.trim() ?? ''
+    const isSearching = committed.length > 0
+
+    function commit() {
+        const next = draft.trim()
+        void navigate({ search: next ? { q: next } : {} })
+    }
+
+    function handleChange(value: string) {
+        setDraft(value)
+        // Emptying the box returns to trending immediately.
+        if (!value.trim()) void navigate({ search: {} })
+    }
 
     return (
-        <main className="home">
-            <header className="home__hero">
-                <p className="home__eyebrow">TheMovie</p>
-                <h1 className="home__title">
+        <main className="page">
+            <header className="hero">
+                <p className="hero__eyebrow">TheMovie</p>
+                <h1 className="hero__title">
                     Find a film by <em>describing</em> it, not naming it.
                 </h1>
-                <p className="home__lede">
-                    An AI-native discovery platform. Ask in plain language — the agent escalates
-                    across three retrieval tiers and reasons over the results.
+                <p className="hero__lede">
+                    Search the catalog or browse what’s trending. The conversational agent goes
+                    deeper — it’s coming next.
                 </p>
+                <SearchBar
+                    value={draft}
+                    onChange={handleChange}
+                    onSubmit={commit}
+                    placeholder="Search by title…"
+                    busy={isSearching && search.isFetching}
+                />
             </header>
 
-            <section className="home__tiers" aria-label="Retrieval tiers">
-                {RETRIEVAL_TIERS.map((tier, i) => (
-                    <div key={tier.name} className="tier">
-                        <span className="tier__index">{i + 1}</span>
-                        <h2 className="tier__name">{tier.name}</h2>
-                        <p className="tier__blurb">{tier.blurb}</p>
-                    </div>
-                ))}
-            </section>
-
-            <section className="home__featured" aria-label="Featured movies">
-                <h2 className="home__section-title">Featured</h2>
-                <div className="movie-grid">
-                    {featured.map((movie) => (
-                        <MovieCard key={movie.tmdbId} movie={movie} />
-                    ))}
-                </div>
+            <section
+                className="results"
+                aria-label={isSearching ? 'Search results' : 'Trending movies'}
+            >
+                <h2 className="section-title">
+                    {isSearching ? `Results for “${committed}”` : 'Trending now'}
+                </h2>
+                {isSearching ? (
+                    <MovieGrid
+                        movies={search.data}
+                        isLoading={search.isPending}
+                        isError={search.isError}
+                        emptyLabel={`No movies match “${committed}”. Try another title.`}
+                        errorLabel="Search failed. Please try again."
+                    />
+                ) : (
+                    <MovieGrid
+                        movies={trending.data}
+                        isLoading={trending.isPending}
+                        isError={trending.isError}
+                        errorLabel="Couldn’t load trending right now. Please try again."
+                    />
+                )}
             </section>
         </main>
     )
