@@ -1,0 +1,17 @@
+# Never ship secrets or local installs into the image.
+.env
+.env.*
+node_modules
+
+# Not needed at runtime.
+**/*.test.ts
+drizzle
+drizzle.config.ts
+tmdb-bundled.yaml
+tmdb.d.ts
+.git
+.gitignore
+README.md
+ROADMAP.md
+Dockerfile
+.dockerignore

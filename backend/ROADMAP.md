@@ -4,7 +4,7 @@
 >
 > Ask it *"show me a movie where the hero later becomes the villain"* and it performs **RAG over embedded movie data** (plots, keywords, themes) to find and explain matches — then helps you manage your watchlist, summarizes reviews, and builds a personalized feed.
 
-> ▸ **Current focus:** Phase 6.3 — DevOps: Docker image (`FROM oven/bun:1-alpine`, `CMD ["bun", "run", "src/index.ts"]`) and CI (run backend `bun test` on every PR; frontend `vitest`/`oxlint`/`tsgo` once Phase 7 exists). _(✅ Phase 0–5 · ✅ Phase 6.1 security & limits · ✅ Phase 6.2 cost & observability. Pending: HITL confirmation UI (Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
+> ▸ **Current focus:** Phase 7.1 — Frontend scaffold: Vite+ workspace (oxlint/oxfmt/Vitest/tsgo v7), TanStack Start + React 19 app, and `packages/schemas/` (lift the backend's Zod schemas into a shared package consumed by both). **First frontend milestone — a different stack; worth confirming direction before diving in.** _(✅ Phase 0–5 · ✅ Phase 6 — security, cost/observability, Docker + backend CI. The whole backend is feature-complete. Pending: HITL confirmation UI (Phase 7.3).)_ Update this pointer as phases complete so a fresh session knows where to start (see `CLAUDE.md` → "Working cadence & context hygiene")._
 
 > ⚠️ **Verification debt — pending live env.** These were built and verified **offline** (schema, generated SQL, `tsc`, mocked unit tests) under autonomous mode B. Exercise them against a live **Postgres+pgvector**, **Redis**, and a real **`OPENAI_API_KEY`** once available, then tick:
 > - [ ] **Phase 0 `/health`** — confirm it returns `ok`/200 when Postgres + Redis are actually up.
@@ -20,6 +20,7 @@
 > - [ ] **Phase 5.1 watchlist** — over live DB + Redis: add/remove/list round-trips, `unique_user_movie` makes a re-add idempotent, `GET /:movieId/status` is correct (incl. cold-cache hydration), and another user can't see/mutate your list (auth).
 > - [ ] **Phase 5.2 reviews + recs** — apply migration `0005`; confirm review upsert + recent-list cache (and cold-hydrate); and that `GET /api/v1/recommendations` returns sensible "because you watched X" picks over a seeded pgvector catalog + `OPENAI_API_KEY`.
 > - [ ] **Phase 6.1 rate limiting** — against live Redis: confirm `/api/v1/chat` 429s after 15/min, `X-RateLimit-*`/`Retry-After` headers are set, counters reset after the window, and the limiter fails open when Redis is down.
+> - [ ] **Phase 6.3 Docker/CI** — `docker build` the backend image and run it; confirm the GitHub Actions backend job goes green on a PR (and wire branch protection to require it).
 
 ## 📦 Tech Stack
 
@@ -206,9 +207,11 @@ The conversational window: natural-language movie discovery powered by a **Verce
 * [x] **Token/usage logging** centralized in `src/lib/usage.ts` (`logUsage` + `normalizeUsage`): one parseable `📊 usage label=… model=… in/out/total/cached …` line per AI call, with call-specific meta (retrieval path, candidate count, intent). Adopted by the agent, intent gate, summary, recommendations, and embeddings.
 * [x] **Embedding cost control**: confirmed no redundant re-embedding (content-hash Redis cache + ingestion hash-skip); the embeddings usage log now reports `embedded` vs `fromCache` per batch so redundant spend (and the cache-hit ratio) is observable.
 
-### Milestone 6.3: DevOps
-* [ ] **Docker image** `FROM oven/bun:1-alpine`, `CMD ["bun", "run", "src/index.ts"]`.
-* [ ] **CI/CD**: run backend `bun test` + frontend `vitest` + `oxlint` + `tsgo` type-check on every PR; block merge on failure.
+### Milestone 6.3: DevOps  _(backend complete; live build/CI run pending)_
+* [x] **Docker image** (`backend/Dockerfile`): `FROM oven/bun:1-alpine`, `bun install --frozen-lockfile --production`, copies `src` only (type-only TMDB spec files erased by Bun, excluded), `CMD ["bun", "run", "src/index.ts"]`. `backend/.dockerignore` keeps `.env`/`node_modules`/tests/specs out of the image.
+* [x] **CI/CD** (`.github/workflows/ci.yml`): on every PR + push to `main`, runs the **backend** job — `bun install --frozen-lockfile` → `tsc --noEmit` → `bun test` (all offline, no secrets needed). Frozen lockfile confirmed in sync. _Branch protection should require the "Backend — typecheck + test" check to block merge._
+* [ ] **Frontend CI** (`vitest` + `oxlint` + `tsgo`) — added in **Phase 7.1** once the `frontend/` package exists (the workflow has a placeholder note).
+* Config guarded by `src/devops.test.ts` (base image, CMD, frozen install, secret-exclusion, CI runs tests). _Live `docker build`/run + first green CI run are verification debt._
 
 ---
 
