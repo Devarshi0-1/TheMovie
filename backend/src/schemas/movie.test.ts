@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
     FetchFromTmdbInputSchema,
     MovieResultSchema,
+    ReviewSummarySchema,
     ScoredMovieResultSchema,
     SemanticSearchInputSchema,
     SqlSearchInputSchema,
@@ -65,5 +66,21 @@ describe('tool input schemas', () => {
 
     it('Trending defaults limit to 10 (feature)', () => {
         expect(TrendingInputSchema.parse({}).limit).toBe(10)
+    })
+})
+
+describe('ReviewSummarySchema', () => {
+    it('parses a well-formed summary (feature)', () => {
+        const parsed = ReviewSummarySchema.parse({
+            vibe: 'Tense and well-acted.',
+            pros: ['Great acting'],
+            cons: [],
+        })
+        expect(parsed.pros).toEqual(['Great acting'])
+        expect(parsed.cons).toEqual([])
+    })
+
+    it('rejects a missing vibe (edge: incomplete model output)', () => {
+        expect(() => ReviewSummarySchema.parse({ pros: [], cons: [] })).toThrow()
     })
 })
