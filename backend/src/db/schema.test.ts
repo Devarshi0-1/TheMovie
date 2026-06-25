@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getTableConfig } from 'drizzle-orm/pg-core'
-import { movies } from './schema'
+import { chatMessage, conversation, movies } from './schema'
 
 // Offline schema verification. Applying the migration against a live
 // Postgres+pgvector is pending a reachable DB (tracked in the PR).
@@ -88,5 +88,32 @@ describe('movies migration (offline; live apply pending env)', () => {
             .join('\n')
 
         expect(sql).toContain('ADD COLUMN "source_hash" text')
+    })
+
+    it('creates conversation + chat_message tables for memory (Phase 4.4)', () => {
+        const dir = join(import.meta.dir, '..', '..', 'drizzle')
+        const sql = readdirSync(dir)
+            .filter((f) => f.endsWith('.sql'))
+            .map((f) => readFileSync(join(dir, f), 'utf8'))
+            .join('\n')
+
+        expect(sql).toContain('CREATE TABLE "conversation"')
+        expect(sql).toContain('CREATE TABLE "chat_message"')
+        // chat_message → conversation FK with cascade delete.
+        expect(sql).toMatch(/chat_message.*conversation.*ON DELETE cascade/s)
+    })
+})
+
+describe('conversation + chat_message schema', () => {
+    it('chat_message references conversation and carries jsonb parts (feature)', () => {
+        const cfg = getTableConfig(chatMessage)
+        const cols = cfg.columns.map((c) => c.name).sort()
+        expect(cols).toEqual(['id', 'conversation_id', 'role', 'parts', 'created_at'].sort())
+        expect(cfg.columns.find((c) => c.name === 'parts')?.notNull).toBe(true)
+    })
+
+    it('conversation is indexed by user for per-user lookup (feature)', () => {
+        const cfg = getTableConfig(conversation)
+        expect(cfg.indexes.find((i) => i.config.name === 'conversation_user_idx')).toBeDefined()
     })
 })
