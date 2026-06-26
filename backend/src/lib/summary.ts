@@ -7,7 +7,7 @@ import { ReviewSummarySchema, type ReviewSummary } from '@themovie/schemas'
 
 // Bounded summarization runs on the cheap model (a cost rule), and outputs are
 // cached in Redis so we never re-summarize the same reviews (see CLAUDE.md).
-export const SUMMARY_MODEL = 'gpt-5-mini'
+export const SUMMARY_MODEL = 'gpt-5-nano'
 
 // Summaries are stable; 7 days. The no-reviews placeholder gets a short TTL so a
 // movie that later accrues reviews gets summarized soon after.

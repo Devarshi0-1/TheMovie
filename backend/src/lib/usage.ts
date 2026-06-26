@@ -27,7 +27,7 @@ const n = (v: number | undefined) => v ?? '?'
 
 /**
  * Emit one structured usage line, e.g.
- * `📊 usage label=chat model=gpt-5 in=120 out=45 total=165 cached=80 retrieval=sql`
+ * `📊 usage label=chat model=gpt-5-nano in=120 out=45 total=165 cached=80 retrieval=sql`
  * Pass `meta` for call-specific context (retrieval path, cache hits, …).
  */
 export function logUsage(

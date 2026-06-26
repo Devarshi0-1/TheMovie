@@ -10,7 +10,7 @@ import { RecommendationsSchema, type Recommendation } from '@themovie/schemas'
 // "Because you watched X" recommendations: take the user's watched movies, find
 // the nearest movies by embedding (pgvector kNN) per seed, merge into a
 // candidate set, then have the agent rank + explain. Bounded task → cheap model.
-export const RECOMMENDATION_MODEL = 'gpt-5-mini'
+export const RECOMMENDATION_MODEL = 'gpt-5-nano'
 
 const MAX_SEEDS = 5 // most recent watched movies to seed from
 const PER_SEED_K = 10 // nearest neighbours per seed

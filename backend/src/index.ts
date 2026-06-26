@@ -21,7 +21,7 @@ export default {
     // services (and in containers); defaults to 3000.
     port: resolvePort(process.env.PORT),
     // Bun.serve idles connections out after 10s by default. The chat agent
-    // streams a gpt-5 loop (reasoning + multi-step tool calls) where many seconds
+    // streams a reasoning + multi-step tool-calling loop where many seconds
     // can pass between bytes, so the default tears the SSE stream down mid-answer
     // and aborts in-flight tool fetches. Raise to Bun's maximum (255s).
     idleTimeout: 255,

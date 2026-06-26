@@ -200,8 +200,8 @@ export async function fetchFromTmdb(
     input: FetchFromTmdbInput,
     deps: RetrievalDeps = defaultDeps(),
 ): Promise<MovieResult[]> {
-    // A TMDB id counts as "provided" only when it's a positive integer. The agent
-    // (gpt-5) often fills the optional `tmdbId` with a `0` placeholder alongside a
+    // A TMDB id counts as "provided" only when it's a positive integer. The model
+    // often fills the optional `tmdbId` with a `0` placeholder alongside a
     // real `query`; treating `0` as a valid id (it `!== undefined`) would fetch the
     // non-existent movie id 0 (404) and ignore the query. Require > 0 so the query
     // path wins in that case.
