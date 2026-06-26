@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { AGENT_MODEL } from './agent/agent'
+import { INTENT_MODEL } from './agent/intent'
+import { SUMMARY_MODEL } from './lib/summary'
+import { RECOMMENDATION_MODEL } from './lib/recommendations'
 
 // Guards the deploy/CI config (Phase 6.3) against accidental breakage. These are
 // offline file-content checks — the real build/run is exercised on the PR's CI
@@ -43,5 +47,20 @@ describe('CI workflow', () => {
     it('type-checks and tests the backend (feature)', () => {
         expect(ci).toContain('tsc --noEmit')
         expect(ci).toContain('bun test')
+    })
+})
+
+describe('AI model configuration', () => {
+    // Drift guard (CLAUDE.md → "Right-size the model"): the project runs
+    // `gpt-5-nano` across every LLM call as a deliberate cost choice, and the docs
+    // (ROADMAP.md / README.md / VERIFICATION.md) state so. If a specific call is
+    // intentionally stepped up a tier (gpt-5-mini, then gpt-5), update the constant
+    // AND those docs together, then this assertion — so code and docs never silently
+    // diverge (which is exactly what this guard caught after commit 9834d2c).
+    it('pins every LLM call to gpt-5-nano (agent, intent, summary, recs) (feature)', () => {
+        expect(AGENT_MODEL).toBe('gpt-5-nano')
+        expect(INTENT_MODEL).toBe('gpt-5-nano')
+        expect(SUMMARY_MODEL).toBe('gpt-5-nano')
+        expect(RECOMMENDATION_MODEL).toBe('gpt-5-nano')
     })
 })
