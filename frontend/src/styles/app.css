@@ -972,6 +972,16 @@ em {
     line-height: 1.5;
 }
 
+.hitl__list {
+    margin: 0 0 0.75rem;
+    padding-left: 1.1rem;
+    max-height: 11rem;
+    overflow-y: auto;
+    color: var(--text);
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
 .hitl__error {
     color: var(--danger);
     font-size: 0.85rem;

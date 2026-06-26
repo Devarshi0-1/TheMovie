@@ -19,8 +19,7 @@ export const MANAGE_WATCHLIST = 'manage_watchlist'
 
 export interface ManageWatchlistOutput {
     status: 'added' | 'removed' | 'declined'
-    movieId: number
-    title?: string
+    movies: { movieId: number; title?: string }[]
 }
 
 export interface AppUITools {

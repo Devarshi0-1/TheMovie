@@ -21,17 +21,29 @@ describe('WatchlistAddSchema', () => {
 })
 
 describe('ManageWatchlistInputSchema', () => {
-    it('accepts add/remove actions (feature)', () => {
-        expect(
-            ManageWatchlistInputSchema.parse({ action: 'add', movieId: 5, title: 'Dune' }).action,
-        ).toBe('add')
-        expect(ManageWatchlistInputSchema.parse({ action: 'remove', movieId: 5 }).action).toBe(
-            'remove',
-        )
+    it('accepts a batch of movies to add (feature)', () => {
+        const parsed = ManageWatchlistInputSchema.parse({
+            action: 'add',
+            movies: [
+                { movieId: 5, title: 'Dune' },
+                { movieId: 6, title: 'Dune: Part Two' },
+            ],
+        })
+        expect(parsed.action).toBe('add')
+        expect(parsed.movies.map((m) => m.movieId)).toEqual([5, 6])
     })
 
-    it('rejects an unknown action (edge)', () => {
-        expect(() => ManageWatchlistInputSchema.parse({ action: 'clear', movieId: 5 })).toThrow()
+    it('accepts a single-movie remove batch (feature)', () => {
+        expect(
+            ManageWatchlistInputSchema.parse({ action: 'remove', movies: [{ movieId: 5 }] }).action,
+        ).toBe('remove')
+    })
+
+    it('rejects an unknown action and an empty movie list (edge)', () => {
+        expect(() =>
+            ManageWatchlistInputSchema.parse({ action: 'clear', movies: [{ movieId: 5 }] }),
+        ).toThrow()
+        expect(() => ManageWatchlistInputSchema.parse({ action: 'add', movies: [] })).toThrow()
     })
 })
 

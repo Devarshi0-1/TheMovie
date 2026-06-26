@@ -53,7 +53,7 @@ describe('<ChatMessage />', () => {
                         type: 'tool-manage_watchlist',
                         toolCallId: 't1',
                         state: 'input-available',
-                        input: { action: 'add', movieId: 27205, title: 'Inception' },
+                        input: { action: 'add', movies: [{ movieId: 27205, title: 'Inception' }] },
                     },
                 ])}
                 onToolResult={noop}
@@ -70,8 +70,8 @@ describe('<ChatMessage />', () => {
                         type: 'tool-manage_watchlist',
                         toolCallId: 't1',
                         state: 'output-available',
-                        input: { action: 'add', movieId: 27205, title: 'Inception' },
-                        output: { status: 'added', movieId: 27205, title: 'Inception' },
+                        input: { action: 'add', movies: [{ movieId: 27205, title: 'Inception' }] },
+                        output: { status: 'added', movies: [{ movieId: 27205, title: 'Inception' }] },
                     },
                 ])}
                 onToolResult={noop}
