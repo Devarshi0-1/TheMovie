@@ -8,7 +8,30 @@ import type { paths } from './../../tmdb'
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 const TIL_CACHE = 3600
 
-async function fetchFromTMDB<T>(endpoint: string): Promise<T> {
+// TMDB's edge intermittently resets connections from some networks (`fetch`
+// rejects, e.g. ECONNRESET) and occasionally returns transient 5xx/429s. Retry
+// those a few times with exponential backoff so one flaky attempt doesn't fail
+// the request; the Redis cache layer above then reuses the eventual hit. Other
+// 4xx (bad request, 404) are NOT retried — a retry can't fix them.
+const TMDB_MAX_RETRIES = 3
+const TMDB_RETRY_BASE_MS = 200
+
+// Real backoff sleep; injectable so tests exercise the retry loop without waiting.
+const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+export interface FetchRetryOptions {
+    maxRetries?: number
+    baseDelayMs?: number
+    sleep?: (ms: number) => Promise<void>
+}
+
+// Worth retrying: transient server errors (5xx) and rate limits (429).
+const isRetryableStatus = (status: number): boolean => status >= 500 || status === 429
+
+export async function fetchFromTMDB<T>(
+    endpoint: string,
+    options: FetchRetryOptions = {},
+): Promise<T> {
     // Read at call time (not module load) so the key can be provided after
     // import — e.g. via dotenv, or set in tests — rather than captured as
     // `undefined` when the module is first evaluated.
@@ -17,19 +40,49 @@ async function fetchFromTMDB<T>(endpoint: string): Promise<T> {
         throw new Error('TMDB_READ_ACCESS_API_KEY is not defined')
     }
 
-    const response = await fetch(`${TMDB_BASE_URL}${endpoint}`, {
-        method: 'GET',
-        headers: {
-            accept: 'application/json',
-            Authorization: `Bearer ${apiKey}`,
-        },
-    })
+    const maxRetries = options.maxRetries ?? TMDB_MAX_RETRIES
+    const baseDelayMs = options.baseDelayMs ?? TMDB_RETRY_BASE_MS
+    const sleep = options.sleep ?? realSleep
 
-    if (!response.ok) {
+    let lastError: unknown
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        let response: Response
+        try {
+            response = await fetch(`${TMDB_BASE_URL}${endpoint}`, {
+                method: 'GET',
+                headers: {
+                    accept: 'application/json',
+                    Authorization: `Bearer ${apiKey}`,
+                },
+            })
+        } catch (err) {
+            // Network-level failure (e.g. ECONNRESET): `fetch` rejected before a
+            // response arrived. Back off and retry; rethrow once the budget runs out.
+            lastError = err
+            if (attempt < maxRetries) {
+                await sleep(baseDelayMs * 2 ** attempt)
+                continue
+            }
+            throw err
+        }
+
+        if (response.ok) {
+            return response.json() as Promise<T>
+        }
+
+        // Retry transient server errors / rate limits; surface other 4xx now.
+        if (isRetryableStatus(response.status) && attempt < maxRetries) {
+            lastError = new Error(`TMDB ${response.status} ${response.statusText}`)
+            await sleep(baseDelayMs * 2 ** attempt)
+            continue
+        }
+
         throw new Error(`Failed to fetch from TMDB, ${response.statusText}`)
     }
 
-    return response.json() as Promise<T>
+    // The loop always returns or throws above; this only guards a misconfigured
+    // negative maxRetries and keeps the type checker happy.
+    throw (lastError as Error | undefined) ?? new Error('Failed to fetch from TMDB')
 }
 
 // Cache injected behind a function type so tests pass a fake instead of mocking
