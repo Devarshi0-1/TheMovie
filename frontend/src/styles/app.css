@@ -758,12 +758,40 @@ em {
 
 /* ── Chat window ────────────────────────────────────────────────────────── */
 .chat-page__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
     margin-bottom: 1.25rem;
 }
 
 .chat-page__sub {
     color: var(--muted);
     margin: 0.25rem 0 0;
+}
+
+.chat-page__new {
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 0.45rem 0.95rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        color 0.15s ease;
+}
+
+.chat-page__new:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.chat-page__new:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .chat {

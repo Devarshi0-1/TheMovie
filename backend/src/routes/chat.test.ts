@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import type { UIMessage } from 'ai'
-import { handleChat, type ChatContext, type ChatDeps } from './chat'
+import { handleChat, loadConversationMessages, type ChatContext, type ChatDeps } from './chat'
 import type { ConversationStore } from '../lib/conversation'
 import type { GateDecision, IntentResult } from '@themovie/schemas'
 
@@ -275,5 +275,26 @@ describe('handleChat — empty query', () => {
         expect(agent.ran).toHaveLength(0)
         expect(store.saved).toHaveLength(0)
         expect((await res.text()).length).toBeGreaterThan(0)
+    })
+})
+
+describe('loadConversationMessages — cross-session resume', () => {
+    const prior = [
+        { id: 'u1', role: 'user', parts: [{ type: 'text', text: 'hi' }] } as UIMessage,
+        { id: 'a1', role: 'assistant', parts: [{ type: 'text', text: 'hello' }] } as UIMessage,
+    ]
+
+    it('returns the owned conversation’s prior turns (feature)', async () => {
+        const { store, loads } = fakeStore(prior)
+        const out = await loadConversationMessages('user-1', 'conv-1', store)
+        expect(out).toEqual(prior)
+        expect(loads).toEqual(['conv-1']) // ownership-checked load ran
+    })
+
+    it('returns [] when the conversation is unknown or another user’s (edge)', async () => {
+        // store.load returns null for a missing / non-owned conversation.
+        const { store } = fakeStore(null)
+        const out = await loadConversationMessages('user-1', 'someone-elses-conv', store)
+        expect(out).toEqual([])
     })
 })
