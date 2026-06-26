@@ -7,16 +7,38 @@ import { conversationStore, type ConversationStore } from '../lib/conversation'
 import { ChatRequestSchema } from '@themovie/schemas'
 import type { GateDecision } from '@themovie/schemas'
 
-// Stream a single assistant text message (the intent-gate refusal) as a UI
-// message stream, so `useChat` renders it exactly like a normal reply — without
+// Split text into small streaming chunks — words with their trailing whitespace —
+// so a canned refusal can be emitted token-by-token, the way the agent's real
+// answers stream, instead of arriving in a single block.
+export function splitIntoStreamChunks(text: string): string[] {
+    return text.match(/\S+\s*/g) ?? (text ? [text] : [])
+}
+
+const sleep = (ms: number): Promise<void> =>
+    ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve()
+
+// Per-chunk delay for the streamed refusal, read at call time so tests can zero
+// it via REFUSAL_STREAM_DELAY_MS. A small delay makes the tokens flush separately
+// so the client renders them progressively rather than all at once.
+function refusalStreamDelayMs(): number {
+    const raw = Number(process.env.REFUSAL_STREAM_DELAY_MS)
+    return Number.isFinite(raw) && raw >= 0 ? raw : 18
+}
+
+// Stream the intent-gate refusal as a UI message stream, emitted token-by-token
+// so `useChat` renders it progressively — exactly like a normal reply — without
 // ever invoking the multi-step agent loop. Carries the conversation id back so
 // the client can continue the thread.
 function refusalResponse(text: string, conversationId?: string): Response {
+    const delay = refusalStreamDelayMs()
     const stream = createUIMessageStream({
-        execute: ({ writer }) => {
+        execute: async ({ writer }) => {
             const id = 'refusal'
             writer.write({ type: 'text-start', id })
-            writer.write({ type: 'text-delta', id, delta: text })
+            for (const chunk of splitIntoStreamChunks(text)) {
+                writer.write({ type: 'text-delta', id, delta: chunk })
+                await sleep(delay)
+            }
             writer.write({ type: 'text-end', id })
         },
     })

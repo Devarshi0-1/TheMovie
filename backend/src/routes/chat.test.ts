@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'bun:test'
 import type { UIMessage } from 'ai'
-import { handleChat, loadConversationMessages, type ChatContext, type ChatDeps } from './chat'
+import {
+    handleChat,
+    loadConversationMessages,
+    splitIntoStreamChunks,
+    type ChatContext,
+    type ChatDeps,
+} from './chat'
 import type { ConversationStore } from '../lib/conversation'
 import type { GateDecision, IntentResult } from '@themovie/schemas'
+
+// Zero the per-token streaming delay so refusal-path tests don't wait on timers.
+process.env.REFUSAL_STREAM_DELAY_MS = '0'
+
+// Reconstruct the assistant text from a streamed UI-message response by joining
+// its `text-delta` chunks — the refusal now streams token-by-token, so the full
+// message is no longer a single contiguous substring of the raw stream body.
+async function streamedText(res: Response): Promise<string> {
+    const body = await res.text()
+    return [...body.matchAll(/"delta":"((?:[^"\\]|\\.)*)"/g)]
+        .map((m) => JSON.parse(`"${m[1]}"`) as string)
+        .join('')
+}
 
 const userMsg = (text: string, id = 'u1'): UIMessage =>
     ({ id, role: 'user', parts: [{ type: 'text', text }] }) as UIMessage
@@ -247,7 +266,21 @@ describe('handleChat — gate refusal path', () => {
         })
         const res = await handleChat(ctx({ messages: [userMsg('write me python')] }), deps)
         expect(agent.ran).toHaveLength(0) // expensive loop never runs
-        expect(await res.text()).toContain('I only help with movies.')
+        expect(await streamedText(res)).toContain('I only help with movies.')
+    })
+
+    it('streams the refusal token-by-token, not as one block (feature)', async () => {
+        const refusal = 'I only help with movies and watchlists.'
+        const { deps } = makeDeps({
+            allowed: false,
+            result: intentResult({ intent: 'off_topic', relevant: false }),
+            refusal,
+        })
+        const res = await handleChat(ctx({ messages: [userMsg('write me python')] }), deps)
+        const body = await res.text()
+        // Multiple text-delta chunks => the client renders it progressively.
+        const deltas = (body.match(/"type":"text-delta"/g) ?? []).length
+        expect(deltas).toBeGreaterThan(1)
     })
 
     it('still persists the user + refusal turn (feature: coherent thread on resume)', async () => {
@@ -296,5 +329,22 @@ describe('loadConversationMessages — cross-session resume', () => {
         const { store } = fakeStore(null)
         const out = await loadConversationMessages('user-1', 'someone-elses-conv', store)
         expect(out).toEqual([])
+    })
+})
+
+describe('splitIntoStreamChunks — token-by-token refusal', () => {
+    it('splits into word chunks that rejoin to the original (feature)', () => {
+        const text = 'I only help with movies.'
+        const chunks = splitIntoStreamChunks(text)
+        expect(chunks.length).toBeGreaterThan(1)
+        expect(chunks.join('')).toBe(text)
+    })
+
+    it('keeps a single word as one chunk (edge)', () => {
+        expect(splitIntoStreamChunks('No.')).toEqual(['No.'])
+    })
+
+    it('returns [] for empty text (edge)', () => {
+        expect(splitIntoStreamChunks('')).toEqual([])
     })
 })
