@@ -26,7 +26,7 @@ The codebase is a workspace with three packages: **`backend/`** (Bun + Hono API)
 
 ### AI layer (Vercel AI SDK + OpenAI, single vendor)
 - **Toolkit:** **Vercel AI SDK** — `ai` + `@ai-sdk/openai` on the backend, `@ai-sdk/react` on the frontend. One toolkit for model calls, tool calling, structured output, embeddings, and streaming. (No LangChain/LangGraph.)
-- **Reasoning/agent LLM:** **OpenAI `gpt-5`** via `openai('gpt-5')`, driven by **`streamText`** with tools and multi-step loops (`stopWhen: stepCountIs(...)`). The chat agent is hosted in our Hono backend (the model calls *our* tools) — we orchestrate the loop ourselves. (Model IDs are swappable — pin what your account has.)
+- **Reasoning/agent LLM:** **OpenAI `gpt-5-nano`** via `openai('gpt-5-nano')`, driven by **`streamText`** with tools and multi-step loops (`stopWhen: stepCountIs(...)`). The chat agent is hosted in our Hono backend (the model calls *our* tools) — we orchestrate the loop ourselves. (The project runs `gpt-5-nano` across the board as a deliberate cost choice — see "Right-size the model" below; model IDs are swappable — pin what your account has, and step up a tier if quality demands it.)
 - **Embeddings:** **OpenAI `text-embedding-3-small`** (1536-dim) via the AI SDK's `embed` / `embedMany` (`openai.textEmbeddingModel('text-embedding-3-small')`).
 - **Streaming:** the backend returns `streamText(...).toUIMessageStreamResponse()` — a standard `Response` Hono returns directly; the frontend consumes it with **`useChat`** (`@ai-sdk/react`).
 - **Structured output:** `generateObject({ schema })` with a shared Zod schema (used by the intent gate).
@@ -51,7 +51,7 @@ The **backend** deliberately avoids npm packages when Bun ships a native equival
    Run the relevant suite before declaring work done; never break existing tests. Report failures with the actual output — don't claim green when it isn't. Bug fixes ship a regression test.
 4. **Be cost-aware with AI calls.** These rules are load-bearing for this project's economics:
    - **Cache embeddings** — never re-embed unchanged text (key by a content hash). Re-embedding the catalog is the biggest avoidable cost.
-   - **Right-size the model** — use `gpt-5` for the reasoning agent; use a cheaper model (**`gpt-5-mini`**) for bounded tasks (the intent gate, review summarization, query classification).
+   - **Right-size the model** — the project currently runs **`gpt-5-nano`** across the board (the reasoning agent *and* the bounded tasks: intent gate, review summarization, recommendations) as a deliberate cost choice. If a task's quality suffers, step *that* call up a tier (`gpt-5-mini`, then `gpt-5`) rather than raising the floor everywhere.
    - **Exploit prompt caching** — keep the agent's stable system prompt + tool definitions at the *start* of the prompt so OpenAI's automatic prompt caching applies; keep volatile content (per-request query, timestamps) at the end.
    - **Cache AI outputs** in Redis where reusable (e.g. per-movie review summaries) with sensible TTLs.
    - **Log token usage** (`usage` from each AI SDK call — prompt/completion/cached) per request so cost is observable.
@@ -83,8 +83,8 @@ A merged PR is a save point. Once work is committed, prefer **`/clear` at the mi
 
 Every user query flows through three stages, built with the **Vercel AI SDK** as plain TypeScript control flow + tool calling. Per-user conversation history is persisted in Postgres for multi-turn memory (loaded on each request, appended via `streamText`'s `onFinish`).
 
-1. **Intent gate (guardrail, runs first).** A cheap **`gpt-5-mini`** `generateObject` call with a Zod schema decides whether the query is relevant to movie discovery/watchlists and tags its intent (search / details / watchlist / recommendation / chitchat / off-topic / injection). **Block** off-topic, abusive, or prompt-injection requests *before* entering the expensive `gpt-5` loop — this is both a safety boundary and a cost control.
-2. **Tiered retrieval (agent-driven, cheapest-sufficient-first).** Relevant queries enter a `streamText` agent loop (`model: openai('gpt-5')`, `stopWhen: stepCountIs(...)`) with retrieval exposed as `tool()`s. The system prompt instructs the agent to prefer the cheapest tier that answers the query:
+1. **Intent gate (guardrail, runs first).** A cheap single **`gpt-5-nano`** `generateObject` call with a Zod schema decides whether the query is relevant to movie discovery/watchlists and tags its intent (search / details / watchlist / recommendation / chitchat / off-topic / injection). **Block** off-topic, abusive, or prompt-injection requests *before* entering the multi-step `gpt-5-nano` agent loop — this is both a safety boundary and a cost control.
+2. **Tiered retrieval (agent-driven, cheapest-sufficient-first).** Relevant queries enter a `streamText` agent loop (`model: openai('gpt-5-nano')`, `stopWhen: stepCountIs(...)`) with retrieval exposed as `tool()`s. The system prompt instructs the agent to prefer the cheapest tier that answers the query:
    - **SQL search** (`search_movies_sql`) — structured/exact intent: a title, a genre, a year, "sci-fi from 2010". Most precise, cheapest.
    - **Semantic/embedding search** (`semantic_search_movies`) — conceptual/thematic intent keywords can't capture: "hero later becomes the villain", "slow-burn dread like Hereditary". OpenAI-embedded query → pgvector cosine kNN (via Drizzle).
    - **TMDB API** (`fetch_from_tmdb`) — last resort, on a local-catalog miss, a brand-new release, or an obscure title. On a hit, **write back** (upsert + embed) so the catalog self-heals and the next query is served locally.

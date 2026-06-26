@@ -9,8 +9,8 @@ import {
 } from '@themovie/schemas'
 
 // Cheap, bounded classifier model by design — the intent gate is both a safety
-// boundary and a cost control, so it must never use the expensive gpt-5 agent.
-export const INTENT_MODEL = 'gpt-5-mini'
+// boundary and a cost control, so it must never enter the multi-step agent loop.
+export const INTENT_MODEL = 'gpt-5-nano'
 
 // Stable system prompt kept first (and the per-request query last, in `prompt`)
 // so OpenAI's automatic prompt caching applies to the bulk of each call.
@@ -80,8 +80,8 @@ const EMPTY_QUERY_DECISION: GateDecision = {
 }
 
 /**
- * The guardrail that runs before the expensive agent loop: classify the query
- * with gpt-5-mini and decide whether it may proceed. Off-topic, abusive, and
+ * The guardrail that runs before the multi-step agent loop: classify the query
+ * with a single cheap model call and decide whether it may proceed. Off-topic, abusive, and
  * prompt-injection queries are blocked here with a friendly refusal.
  */
 export async function runIntentGate(

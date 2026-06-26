@@ -10,9 +10,10 @@ import { logUsage, normalizeUsage } from '../lib/usage'
 import { retrievalTools } from './tools'
 import { createUserTools } from './userTools'
 
-// The reasoning agent runs gpt-5 (the expensive tier) — it only ever sees
-// queries the cheap intent gate already approved.
-export const AGENT_MODEL = 'gpt-5'
+// The reasoning agent that drives the chat tool loop. Pinned to gpt-5-nano (the
+// cheapest GPT-5-family model) per the project's cost directive; it only ever
+// sees queries the intent gate already approved.
+export const AGENT_MODEL = 'gpt-5-nano'
 
 // Cap the tool loop so a misbehaving model can't run unboundedly. A typical
 // query resolves in 1–3 steps (retrieve → maybe escalate → synthesize); the
@@ -97,7 +98,7 @@ function logChatFinish(
 }
 
 /**
- * Run the gpt-5 agent loop over the conversation. Returns the streaming result;
+ * Run the agent loop over the conversation. Returns the streaming result;
  * the caller streams it to the client via `toUIMessageStreamResponse()`. Assumes
  * the query already passed the intent gate.
  */

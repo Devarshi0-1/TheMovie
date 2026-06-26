@@ -9,7 +9,7 @@ import type { GateDecision } from '@themovie/schemas'
 
 // Stream a single assistant text message (the intent-gate refusal) as a UI
 // message stream, so `useChat` renders it exactly like a normal reply — without
-// ever invoking the expensive gpt-5 loop. Carries the conversation id back so
+// ever invoking the multi-step agent loop. Carries the conversation id back so
 // the client can continue the thread.
 function refusalResponse(text: string, conversationId?: string): Response {
     const stream = createUIMessageStream({
@@ -114,7 +114,7 @@ const defaultChatDeps: ChatDeps = {
 
 /**
  * The chat pipeline as plain control flow with multi-turn memory: load prior
- * turns → intent gate (cheap guardrail) → gpt-5 agent loop over the full
+ * turns → intent gate (cheap guardrail) → agent loop over the full
  * conversation → persist the new turn via the stream's onFinish. Blocked/empty
  * queries get a streamed refusal and never reach the expensive model. IO
  * injected for testing.

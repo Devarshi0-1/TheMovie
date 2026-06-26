@@ -76,7 +76,7 @@ const summarizeReviewsTool = tool({
     execute: (input) => summarizeReviews(input.tmdbId),
 })
 
-/** The retrieval toolset the agent loop exposes to gpt-5. */
+/** The retrieval toolset the agent loop exposes to the model. */
 export const retrievalTools = {
     search_movies_sql: searchMoviesSqlTool,
     semantic_search_movies: semanticSearchMoviesTool,
