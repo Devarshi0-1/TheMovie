@@ -98,7 +98,10 @@ describe('<ChatWindow />', () => {
                                 type: 'tool-manage_watchlist',
                                 toolCallId: 'tc1',
                                 state: 'input-available',
-                                input: { action: 'add', movieId: 27205, title: 'Inception' },
+                                input: {
+                                    action: 'add',
+                                    movies: [{ movieId: 27205, title: 'Inception' }],
+                                },
                             },
                         ],
                     },
@@ -112,7 +115,7 @@ describe('<ChatWindow />', () => {
             expect(addToolResult).toHaveBeenCalledWith({
                 tool: 'manage_watchlist',
                 toolCallId: 'tc1',
-                output: { status: 'added', movieId: 27205, title: 'Inception' },
+                output: { status: 'added', movies: [{ movieId: 27205, title: 'Inception' }] },
             }),
         )
     })

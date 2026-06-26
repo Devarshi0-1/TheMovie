@@ -32,9 +32,11 @@ export function createUserTools(userId: string) {
         // confirmation UI lands in Phase 7.3.
         manage_watchlist: tool({
             description:
-                "Add or remove a movie from the user's watchlist. This REQUIRES the user's explicit " +
-                'confirmation before anything changes — it does not modify the watchlist on its own. ' +
-                'Call it to propose the change; the user approves or denies it.',
+                "Add or remove movies on the user's watchlist. Pass EVERY movie the user wants " +
+                'changed in ONE call via the `movies` array — never call this tool repeatedly, ' +
+                "one per movie. This REQUIRES the user's explicit confirmation before anything " +
+                'changes; it does not modify the watchlist on its own. Call it to propose the ' +
+                'change; the user approves or denies it.',
             inputSchema: ManageWatchlistInputSchema,
         }),
     }

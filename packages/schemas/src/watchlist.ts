@@ -20,9 +20,8 @@ export const WatchlistEntrySchema = z.object({
 })
 export type WatchlistEntry = z.infer<typeof WatchlistEntrySchema>
 
-/** Input for the conversational `manage_watchlist` agent tool. */
-export const ManageWatchlistInputSchema = z.object({
-    action: z.enum(['add', 'remove']).describe('Whether to add or remove the movie.'),
+/** One movie in a `manage_watchlist` proposal. */
+export const ManageWatchlistMovieSchema = z.object({
     movieId: z.number().int().positive().describe('The TMDB movie id to add/remove.'),
     title: z
         .string()
@@ -30,5 +29,22 @@ export const ManageWatchlistInputSchema = z.object({
         .optional()
         .describe('The movie title (required when adding so it can be displayed).'),
     posterPath: z.string().nullable().optional().describe('Optional poster path when adding.'),
+})
+export type ManageWatchlistMovie = z.infer<typeof ManageWatchlistMovieSchema>
+
+/**
+ * Input for the conversational `manage_watchlist` agent tool. Batched: ONE call
+ * carries every movie to change, so the user confirms a multi-movie change once
+ * instead of approving each film individually.
+ */
+export const ManageWatchlistInputSchema = z.object({
+    action: z.enum(['add', 'remove']).describe('Whether to add or remove the movies.'),
+    movies: z
+        .array(ManageWatchlistMovieSchema)
+        .min(1)
+        .describe(
+            'Every movie to add or remove in this single confirmation. Include ALL of them ' +
+                'here — never call the tool once per movie.',
+        ),
 })
 export type ManageWatchlistInput = z.infer<typeof ManageWatchlistInputSchema>

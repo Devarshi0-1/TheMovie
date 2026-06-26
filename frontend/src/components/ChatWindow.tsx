@@ -62,13 +62,13 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
     const streaming = status === 'submitted' || status === 'streaming'
 
     function handleToolResult(toolCallId: string, output: ManageWatchlistOutput) {
-        // The REST mutation already ran inside the confirm UI; keep the watchlist
-        // query caches consistent with it.
+        // The REST mutations already ran inside the confirm UI; keep the watchlist
+        // query caches consistent with them (one entry per movie in the batch).
         if (output.status === 'added' || output.status === 'removed') {
-            queryClient.setQueryData(
-                ['watchlist', 'status', output.movieId],
-                output.status === 'added',
-            )
+            const inList = output.status === 'added'
+            for (const movie of output.movies) {
+                queryClient.setQueryData(['watchlist', 'status', movie.movieId], inList)
+            }
             void queryClient.invalidateQueries({ queryKey: ['watchlist'] })
         }
         void addToolResult({ tool: MANAGE_WATCHLIST, toolCallId, output })
