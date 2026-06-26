@@ -28,7 +28,9 @@ app.use(
         origin: (origin) => (allowedOrigins.includes(origin) ? origin : allowedOrigins[0]),
         allowHeaders: ['Content-Type', 'Authorization'],
         allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        exposeHeaders: ['Content-Type'],
+        // Expose X-Conversation-Id so the chat client can read the id the server
+        // used and persist it for cross-session resume.
+        exposeHeaders: ['Content-Type', 'X-Conversation-Id'],
         maxAge: 600,
         credentials: true,
     }),

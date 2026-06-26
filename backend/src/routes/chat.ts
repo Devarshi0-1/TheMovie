@@ -186,6 +186,20 @@ export async function handleChat(
     })
 }
 
+/**
+ * Prior messages for an owned conversation, used to restore the thread on a
+ * cross-session reload. Returns [] when the id is unknown or owned by another
+ * user — `store.load` is ownership-checked, so this never leaks another user's
+ * history. Store injected for testing.
+ */
+export async function loadConversationMessages(
+    userId: string,
+    conversationId: string,
+    store: ConversationStore = conversationStore,
+): Promise<UIMessage[]> {
+    return (await store.load(userId, conversationId)) ?? []
+}
+
 const chatRoute = new Hono()
 
 chatRoute.post('/', async (c) => {
@@ -203,6 +217,16 @@ chatRoute.post('/', async (c) => {
         conversationId: parsed.data.id,
         messages: parsed.data.messages as UIMessage[],
     })
+})
+
+// Restore a conversation's prior turns so the client can resume across sessions.
+chatRoute.get('/:conversationId', async (c) => {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
+    if (!session) return c.json({ error: 'Unauthorized' }, 401)
+
+    const conversationId = c.req.param('conversationId')
+    const messages = await loadConversationMessages(session.user.id, conversationId)
+    return c.json({ id: conversationId, messages })
 })
 
 export default chatRoute

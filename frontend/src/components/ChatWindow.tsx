@@ -4,6 +4,7 @@ import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import { useEffect, useRef } from 'react'
 import {
     createChatTransport,
+    fetchConversationMessages,
     MANAGE_WATCHLIST,
     type AppUIMessage,
     type ManageWatchlistOutput,
@@ -25,14 +26,38 @@ const SUGGESTIONS = [
  * proposal, the change is applied via REST (in the confirm UI), the watchlist
  * caches are refreshed, and the result is fed back so the agent auto-continues.
  */
-export function ChatWindow() {
+export function ChatWindow({ conversationId }: { conversationId?: string }) {
     const queryClient = useQueryClient()
-    const { messages, sendMessage, status, stop, regenerate, error, addToolResult } =
+    const { messages, sendMessage, setMessages, status, stop, regenerate, error, addToolResult } =
         useChat<AppUIMessage>({
+            // The persisted conversation id (when provided) keys the thread: it's
+            // sent in each request body so the backend resumes the same history.
+            id: conversationId,
             transport: createChatTransport(),
             // After the user confirms/denies, re-post so the agent sees the result.
             sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
         })
+
+    // Cross-session resume: rehydrate this conversation's prior turns on mount.
+    // Skipped without an id (e.g. standalone use). `cancelled` ignores a result
+    // that arrives after unmount (incl. React's dev double-mount), and the
+    // empty-thread check means a turn the user already started is never clobbered.
+    useEffect(() => {
+        if (!conversationId) return
+        let cancelled = false
+        void fetchConversationMessages(conversationId)
+            .then((prior) => {
+                if (!cancelled && prior.length > 0) {
+                    setMessages((current) => (current.length === 0 ? prior : current))
+                }
+            })
+            .catch(() => {
+                // A failed restore just starts an empty thread.
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [conversationId, setMessages])
 
     const streaming = status === 'submitted' || status === 'streaming'
 

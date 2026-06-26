@@ -1,6 +1,6 @@
 import type { ManageWatchlistInput } from '@themovie/schemas'
 import { DefaultChatTransport, type UIDataTypes, type UIMessage } from 'ai'
-import { API_BASE } from './api'
+import { API_BASE, apiFetch } from './api'
 
 // The chat agent is hosted at POST /api/v1/chat and is auth-gated, so the
 // transport sends the session cookie. `useChat` posts the full thread; the
@@ -75,4 +75,59 @@ export function toolLabel(name: string, done: boolean): string {
     if (labels) return done ? labels.done : labels.running
     const pretty = name.replace(/_/g, ' ')
     return done ? `Ran ${pretty}` : `Running ${pretty}`
+}
+
+// ── Cross-session resume ────────────────────────────────────────────────────
+// The conversation id is generated client-side and sent on every turn —
+// `DefaultChatTransport` puts the chat `id` in the request body, and the backend
+// keys per-user history by it — so persisting the id lets a reload continue the
+// same server-side thread. The prior turns are rehydrated via the GET endpoint.
+
+const CONVERSATION_STORAGE_KEY = 'themovie:chat:conversation-id'
+
+/** A fresh conversation id. */
+export function newConversationId(): string {
+    return crypto.randomUUID()
+}
+
+/** The persisted conversation id, or null (no window / unset / storage blocked). */
+export function loadStoredConversationId(): string | null {
+    if (typeof window === 'undefined') return null
+    try {
+        return window.localStorage.getItem(CONVERSATION_STORAGE_KEY)
+    } catch {
+        return null
+    }
+}
+
+/** Persist the conversation id so a reload resumes the same thread. */
+export function storeConversationId(id: string): void {
+    if (typeof window === 'undefined') return
+    try {
+        window.localStorage.setItem(CONVERSATION_STORAGE_KEY, id)
+    } catch {
+        // Storage may be unavailable (private mode / quota) — resume just degrades.
+    }
+}
+
+/** Forget the current conversation (used by "New chat"). */
+export function clearStoredConversationId(): void {
+    if (typeof window === 'undefined') return
+    try {
+        window.localStorage.removeItem(CONVERSATION_STORAGE_KEY)
+    } catch {
+        // ignore
+    }
+}
+
+/**
+ * Restore a conversation's prior turns from the backend. Auth + ownership are
+ * checked server-side, so an unknown or foreign id yields []. Used to rehydrate
+ * the chat window after a reload.
+ */
+export async function fetchConversationMessages(id: string): Promise<AppUIMessage[]> {
+    const data = await apiFetch<{ id: string; messages: AppUIMessage[] }>(
+        `/api/v1/chat/${encodeURIComponent(id)}`,
+    )
+    return data.messages ?? []
 }
