@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test'
-import { ManageWatchlistInputSchema, WatchlistAddSchema, WatchlistEntrySchema } from './watchlist'
+import {
+    ManageWatchlistInputSchema,
+    WatchlistAddResultSchema,
+    WatchlistAddSchema,
+    WatchlistEntrySchema,
+    WatchlistRemoveResultSchema,
+    WatchlistStatusSchema,
+} from './watchlist'
 
 describe('WatchlistAddSchema', () => {
     it('parses a valid add body (feature)', () => {
@@ -56,5 +63,18 @@ describe('WatchlistEntrySchema', () => {
             createdAt: '2026-01-01T00:00:00.000Z',
         })
         expect(parsed.title).toBe('Dune')
+    })
+})
+
+describe('REST response schemas', () => {
+    it('parses status, add, and remove results (feature)', () => {
+        expect(WatchlistStatusSchema.parse({ inWatchlist: true }).inWatchlist).toBe(true)
+        expect(WatchlistAddResultSchema.parse({ added: true, movieId: 5 }).added).toBe(true)
+        expect(WatchlistRemoveResultSchema.parse({ removed: true, movieId: 5 }).removed).toBe(true)
+    })
+
+    it('rejects a malformed result (edge)', () => {
+        expect(() => WatchlistStatusSchema.parse({ inWatchlist: 'yes' })).toThrow()
+        expect(() => WatchlistAddResultSchema.parse({ added: true })).toThrow()
     })
 })

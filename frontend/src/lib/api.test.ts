@@ -47,7 +47,8 @@ describe('apiFetch', () => {
         const init = spy.mock.calls[0]![1] as RequestInit
         expect(init.method).toBe('POST')
         expect(init.body).toBe(JSON.stringify({ movieId: 1, title: 'X' }))
-        expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+        // Headers are normalized through a `Headers` instance before fetch.
+        expect(new Headers(init.headers).get('Content-Type')).toBe('application/json')
     })
 
     it('apiDelete issues a DELETE without a body or Content-Type', async () => {
@@ -55,7 +56,7 @@ describe('apiFetch', () => {
         await apiDelete('/api/v1/watchlist/5')
         const init = spy.mock.calls[0]![1] as RequestInit
         expect(init.method).toBe('DELETE')
-        expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+        expect(new Headers(init.headers).get('Content-Type')).toBeNull()
     })
 
     // ── Edge cases ────────────────────────────────────────────────────────

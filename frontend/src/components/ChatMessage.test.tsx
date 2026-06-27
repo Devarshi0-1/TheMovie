@@ -1,6 +1,9 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppUIMessage } from '../lib/chat'
+import { makeTestQueryClient } from '../test/providers'
 import { ChatMessage } from './ChatMessage'
 
 const msg = (role: string, parts: unknown[]): AppUIMessage =>
@@ -8,10 +11,16 @@ const msg = (role: string, parts: unknown[]): AppUIMessage =>
 
 const noop = () => {}
 
+// The HITL prompt mounts <WatchlistConfirm>, which uses the watchlist mutation
+// hooks, so a QueryClient must be in scope.
+function renderMessage(ui: ReactElement) {
+    return render(<QueryClientProvider client={makeTestQueryClient()}>{ui}</QueryClientProvider>)
+}
+
 describe('<ChatMessage />', () => {
     // ── Feature / happy path ──────────────────────────────────────────────
     it('labels and renders a user text turn', () => {
-        render(
+        renderMessage(
             <ChatMessage
                 message={msg('user', [{ type: 'text', text: 'hello' }])}
                 onToolResult={noop}
@@ -22,7 +31,7 @@ describe('<ChatMessage />', () => {
     })
 
     it('renders an assistant text turn', () => {
-        render(
+        renderMessage(
             <ChatMessage
                 message={msg('assistant', [{ type: 'text', text: 'Here are three picks.' }])}
                 onToolResult={noop}
@@ -33,7 +42,7 @@ describe('<ChatMessage />', () => {
     })
 
     it('renders retrieval tool activity', () => {
-        render(
+        renderMessage(
             <ChatMessage
                 message={msg('assistant', [
                     { type: 'tool-search_movies_sql', toolCallId: 't1', state: 'output-available' },
@@ -46,7 +55,7 @@ describe('<ChatMessage />', () => {
 
     // ── HITL ──────────────────────────────────────────────────────────────
     it('renders the watchlist confirmation prompt for a pending manage_watchlist call', () => {
-        render(
+        renderMessage(
             <ChatMessage
                 message={msg('assistant', [
                     {
@@ -63,7 +72,7 @@ describe('<ChatMessage />', () => {
     })
 
     it('renders the settled outcome once the manage_watchlist call resolves', () => {
-        render(
+        renderMessage(
             <ChatMessage
                 message={msg('assistant', [
                     {
@@ -71,7 +80,10 @@ describe('<ChatMessage />', () => {
                         toolCallId: 't1',
                         state: 'output-available',
                         input: { action: 'add', movies: [{ movieId: 27205, title: 'Inception' }] },
-                        output: { status: 'added', movies: [{ movieId: 27205, title: 'Inception' }] },
+                        output: {
+                            status: 'added',
+                            movies: [{ movieId: 27205, title: 'Inception' }],
+                        },
                     },
                 ])}
                 onToolResult={noop}
@@ -83,7 +95,7 @@ describe('<ChatMessage />', () => {
     })
 
     it('does not crash on non-text/non-tool parts (reasoning, step-start)', () => {
-        const { container } = render(
+        const { container } = renderMessage(
             <ChatMessage
                 message={msg('assistant', [
                     { type: 'step-start' },

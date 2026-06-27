@@ -49,6 +49,7 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
 
     const inList = statusQuery.data === true
     const busy = add.isPending || remove.isPending || statusQuery.isLoading
+    const failed = add.isError || remove.isError
 
     function toggle() {
         if (inList) remove.mutate(movieId)
@@ -56,14 +57,21 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
     }
 
     return (
-        <button
-            type="button"
-            className={inList ? 'wl-btn wl-btn--active' : 'wl-btn'}
-            onClick={toggle}
-            disabled={busy}
-            aria-pressed={inList}
-        >
-            {busy ? '…' : inList ? '✓ On your watchlist' : '+ Add to watchlist'}
-        </button>
+        <div className="wl-btn-wrap">
+            <button
+                type="button"
+                className={inList ? 'wl-btn wl-btn--active' : 'wl-btn'}
+                onClick={toggle}
+                disabled={busy}
+                aria-pressed={inList}
+            >
+                {busy ? '…' : inList ? '✓ On your watchlist' : '+ Add to watchlist'}
+            </button>
+            {failed && (
+                <p className="wl-btn__error" role="alert">
+                    Couldn’t update your watchlist. Try again.
+                </p>
+            )}
+        </div>
     )
 }

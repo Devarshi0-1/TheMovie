@@ -1,0 +1,17 @@
+{
+    // Shared strictness floor for every workspace package. Each package extends
+    // this and adds its own module/target/lib/types. Centralizing the strict
+    // flags here stops per-package drift (the frontend and backend tsconfigs had
+    // diverged). The backend + schemas packages adopt this in a follow-up.
+    "compilerOptions": {
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "noImplicitOverride": true,
+        "isolatedModules": true,
+        "verbatimModuleSyntax": true,
+        "forceConsistentCasingInFileNames": true,
+        "moduleResolution": "bundler",
+        "esModuleInterop": true,
+        "skipLibCheck": true
+    }
+}

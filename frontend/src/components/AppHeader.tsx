@@ -58,7 +58,7 @@ export function AppHeader() {
                             <button
                                 type="button"
                                 className="appheader__btn"
-                                onClick={handleSignOut}
+                                onClick={() => void handleSignOut()}
                                 disabled={signingOut}
                             >
                                 {signingOut ? 'Signing out…' : 'Sign out'}

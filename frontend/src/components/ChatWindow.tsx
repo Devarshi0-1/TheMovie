@@ -1,5 +1,4 @@
 import { useChat } from '@ai-sdk/react'
-import { useQueryClient } from '@tanstack/react-query'
 import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import { useEffect, useRef } from 'react'
 import {
@@ -27,7 +26,6 @@ const SUGGESTIONS = [
  * caches are refreshed, and the result is fed back so the agent auto-continues.
  */
 export function ChatWindow({ conversationId }: { conversationId?: string }) {
-    const queryClient = useQueryClient()
     const { messages, sendMessage, setMessages, status, stop, regenerate, error, addToolResult } =
         useChat<AppUIMessage>({
             // The persisted conversation id (when provided) keys the thread: it's
@@ -36,6 +34,8 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
             transport: createChatTransport(),
             // After the user confirms/denies, re-post so the agent sees the result.
             sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+            // Surface stream failures for observability (the UI shows a retry).
+            onError: (err) => console.error('Chat stream error', err),
         })
 
     // Cross-session resume: rehydrate this conversation's prior turns on mount.
@@ -62,21 +62,20 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
     const streaming = status === 'submitted' || status === 'streaming'
 
     function handleToolResult(toolCallId: string, output: ManageWatchlistOutput) {
-        // The REST mutations already ran inside the confirm UI; keep the watchlist
-        // query caches consistent with them (one entry per movie in the batch).
-        if (output.status === 'added' || output.status === 'removed') {
-            const inList = output.status === 'added'
-            for (const movie of output.movies) {
-                queryClient.setQueryData(['watchlist', 'status', movie.movieId], inList)
-            }
-            void queryClient.invalidateQueries({ queryKey: ['watchlist'] })
-        }
+        // The watchlist mutations (and their cache reconciliation) already ran in
+        // the confirm UI via the mutation hooks; here we only feed the result back
+        // so the agent auto-continues.
         void addToolResult({ tool: MANAGE_WATCHLIST, toolCallId, output })
     }
 
+    // Auto-scroll to the latest turn. The first run (mount / cross-session
+    // restore) jumps instantly so it doesn't yank the viewport on initial paint;
+    // subsequent appends animate.
     const endRef = useRef<HTMLDivElement>(null)
+    const scrolledOnce = useRef(false)
     useEffect(() => {
-        endRef.current?.scrollIntoView({ behavior: 'smooth' })
+        endRef.current?.scrollIntoView({ behavior: scrolledOnce.current ? 'smooth' : 'auto' })
+        scrolledOnce.current = true
     }, [messages])
 
     return (
@@ -94,7 +93,7 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
                                     key={text}
                                     type="button"
                                     className="chat__suggestion"
-                                    onClick={() => sendMessage({ text })}
+                                    onClick={() => void sendMessage({ text })}
                                 >
                                     {text}
                                 </button>
@@ -124,7 +123,7 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
             </div>
 
             <ChatComposer
-                onSend={(text) => sendMessage({ text })}
+                onSend={(text) => void sendMessage({ text })}
                 streaming={streaming}
                 onStop={() => void stop()}
             />

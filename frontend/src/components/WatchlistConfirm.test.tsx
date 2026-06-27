@@ -1,6 +1,19 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+// `render` is used by `renderConfirm`.
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { makeTestQueryClient } from '../test/providers'
+import type { ManageWatchlistOutput } from '../lib/chat'
 import { WatchlistConfirm } from './WatchlistConfirm'
+
+// The confirm UI drives the watchlist mutation hooks, so it needs a QueryClient.
+function renderConfirm(input: unknown, onResolve: (o: ManageWatchlistOutput) => void) {
+    return render(
+        <QueryClientProvider client={makeTestQueryClient()}>
+            <WatchlistConfirm input={input} onResolve={onResolve} />
+        </QueryClientProvider>,
+    )
+}
 
 function mockFetch(impl: (url: string, init?: RequestInit) => Response | Promise<Response>) {
     const spy = vi.fn(impl)
@@ -38,7 +51,7 @@ describe('<WatchlistConfirm />', () => {
     it('renders a single proposed add and approving POSTs then resolves "added" (feature)', async () => {
         const spy = mockFetch(() => jsonResponse({ added: true, movieId: 27205 }, 201))
         const onResolve = vi.fn()
-        render(<WatchlistConfirm input={addInput} onResolve={onResolve} />)
+        renderConfirm(addInput, onResolve)
 
         expect(screen.getByText('Inception')).toBeInTheDocument()
         fireEvent.click(screen.getByRole('button', { name: 'Yes, add it' }))
@@ -55,7 +68,7 @@ describe('<WatchlistConfirm />', () => {
     it('adds a whole batch on a single approval — one POST per movie (feature)', async () => {
         const spy = mockFetch(() => jsonResponse({ added: true, movieId: 1 }, 201))
         const onResolve = vi.fn()
-        render(<WatchlistConfirm input={batchAddInput} onResolve={onResolve} />)
+        renderConfirm(batchAddInput, onResolve)
 
         // Every movie is listed, and one button applies them all.
         expect(screen.getByText('Se7en')).toBeInTheDocument()
@@ -78,7 +91,7 @@ describe('<WatchlistConfirm />', () => {
     it('approving a remove proposal DELETEs then resolves "removed" (feature)', async () => {
         const spy = mockFetch(() => jsonResponse({ removed: true, movieId: 27205 }))
         const onResolve = vi.fn()
-        render(<WatchlistConfirm input={removeInput} onResolve={onResolve} />)
+        renderConfirm(removeInput, onResolve)
 
         fireEvent.click(screen.getByRole('button', { name: 'Yes, remove it' }))
         await waitFor(() =>
@@ -94,7 +107,7 @@ describe('<WatchlistConfirm />', () => {
     it('denying resolves "declined" and never calls the API (edge)', () => {
         const spy = mockFetch(() => jsonResponse({}))
         const onResolve = vi.fn()
-        render(<WatchlistConfirm input={addInput} onResolve={onResolve} />)
+        renderConfirm(addInput, onResolve)
 
         fireEvent.click(screen.getByRole('button', { name: 'No' }))
         expect(onResolve).toHaveBeenCalledWith({
@@ -107,15 +120,17 @@ describe('<WatchlistConfirm />', () => {
     it('shows an error and does NOT resolve when a mutation fails (edge)', async () => {
         mockFetch(() => jsonResponse({ error: 'Unauthorized' }, 401))
         const onResolve = vi.fn()
-        render(<WatchlistConfirm input={addInput} onResolve={onResolve} />)
+        renderConfirm(addInput, onResolve)
 
         fireEvent.click(screen.getByRole('button', { name: 'Yes, add it' }))
         expect(await screen.findByText(/Could not update your watchlist/)).toBeInTheDocument()
         expect(onResolve).not.toHaveBeenCalled()
     })
 
-    it('reports a partial failure across a batch and does NOT resolve (edge)', async () => {
-        // First add fails (401); the other two succeed.
+    it('resolves with a partial status when only some of a batch succeed (edge)', async () => {
+        // First add fails (401); the other two succeed. The succeeded subset is
+        // applied + cache-reconciled, and the tool is resolved with the split so
+        // the agent learns the outcome (rather than being left unresolved).
         let n = 0
         mockFetch(() =>
             n++ === 0
@@ -123,16 +138,25 @@ describe('<WatchlistConfirm />', () => {
                 : jsonResponse({ added: true, movieId: 9 }, 201),
         )
         const onResolve = vi.fn()
-        render(<WatchlistConfirm input={batchAddInput} onResolve={onResolve} />)
+        renderConfirm(batchAddInput, onResolve)
 
         fireEvent.click(screen.getByRole('button', { name: 'Yes, add all 3' }))
-        expect(await screen.findByText(/Updated 2 of 3/)).toBeInTheDocument()
-        expect(onResolve).not.toHaveBeenCalled()
+        await waitFor(() =>
+            expect(onResolve).toHaveBeenCalledWith({
+                status: 'partial',
+                action: 'add',
+                movies: [
+                    { movieId: 2, title: 'Martyrs' },
+                    { movieId: 3, title: 'High Tension' },
+                ],
+                failed: [{ movieId: 1, title: 'Se7en' }],
+            }),
+        )
     })
 
     it('rejects a structurally invalid proposal without offering actions (edge)', () => {
         const onResolve = vi.fn()
-        render(<WatchlistConfirm input={{ action: 'frobnicate' }} onResolve={onResolve} />)
+        renderConfirm({ action: 'frobnicate' }, onResolve)
         expect(screen.getByRole('alert')).toHaveTextContent('invalid watchlist change')
         expect(screen.queryByRole('button')).not.toBeInTheDocument()
     })

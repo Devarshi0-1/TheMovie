@@ -1,5 +1,6 @@
 import type { ManageWatchlistInput } from '@themovie/schemas'
 import { DefaultChatTransport, type UIDataTypes, type UIMessage } from 'ai'
+import { z } from 'zod'
 import { API_BASE, apiFetch } from './api'
 
 // The chat agent is hosted at POST /api/v1/chat and is auth-gated, so the
@@ -17,9 +18,19 @@ export function createChatTransport() {
 // `addToolResult` accept the tool name + a well-formed output.
 export const MANAGE_WATCHLIST = 'manage_watchlist'
 
+export interface ManageWatchlistMovie {
+    movieId: number
+    title?: string
+}
+
 export interface ManageWatchlistOutput {
-    status: 'added' | 'removed' | 'declined'
-    movies: { movieId: number; title?: string }[]
+    // `partial` = some of a batch succeeded; the agent reports it and can offer
+    // to retry the rest. `movies` is the set that succeeded (or, for `declined`,
+    // the proposed set); `failed` is present only for `partial`.
+    status: 'added' | 'removed' | 'declined' | 'partial'
+    action?: 'add' | 'remove'
+    movies: ManageWatchlistMovie[]
+    failed?: ManageWatchlistMovie[]
 }
 
 export interface AppUITools {
@@ -119,14 +130,26 @@ export function clearStoredConversationId(): void {
     }
 }
 
+// The restore response: validate the envelope (id + an array of message-shaped
+// objects) rather than trusting it blindly. Parts stay permissive — the UI
+// message-part union is wide — but every entry must at least look like a turn.
+const ConversationMessageSchema = z
+    .object({ id: z.string(), role: z.string(), parts: z.array(z.unknown()) })
+    .loose()
+const ConversationRestoreSchema = z.object({
+    id: z.string(),
+    messages: z.array(ConversationMessageSchema).default([]),
+})
+
 /**
  * Restore a conversation's prior turns from the backend. Auth + ownership are
  * checked server-side, so an unknown or foreign id yields []. Used to rehydrate
- * the chat window after a reload.
+ * the chat window after a reload. The response envelope is validated; a
+ * malformed body throws (the caller degrades to an empty thread).
  */
 export async function fetchConversationMessages(id: string): Promise<AppUIMessage[]> {
-    const data = await apiFetch<{ id: string; messages: AppUIMessage[] }>(
-        `/api/v1/chat/${encodeURIComponent(id)}`,
+    const data = ConversationRestoreSchema.parse(
+        await apiFetch(`/api/v1/chat/${encodeURIComponent(id)}`),
     )
-    return data.messages ?? []
+    return data.messages as unknown as AppUIMessage[]
 }

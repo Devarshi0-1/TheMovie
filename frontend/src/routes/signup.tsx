@@ -1,12 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useEffect } from 'react'
 import { z } from 'zod'
 import { AuthForm } from '../components/AuthForm'
 import {
+    redirectIfAuthenticated,
     sessionQueryKey,
+    SignUpSchema,
     signUp,
-    useSession,
     type SignInValues,
     type SignUpValues,
 } from '../lib/auth'
@@ -16,6 +16,8 @@ const searchSchema = z.object({ redirect: z.string().optional() })
 
 export const Route = createFileRoute('/signup')({
     validateSearch: searchSchema,
+    beforeLoad: ({ context, search }) =>
+        redirectIfAuthenticated(context.queryClient, safeRedirect(search.redirect)),
     component: SignUp,
 })
 
@@ -24,15 +26,11 @@ function SignUp() {
     const dest = safeRedirect(redirect)
     const navigate = useNavigate()
     const queryClient = useQueryClient()
-    const { data: user } = useSession()
-
-    useEffect(() => {
-        if (user) void navigate({ to: dest })
-    }, [user, dest, navigate])
 
     async function handleSubmit(values: SignInValues | SignUpValues) {
-        // requireEmailVerification is off, so sign-up signs the user in.
-        await signUp(values as SignUpValues)
+        // requireEmailVerification is off, so sign-up signs the user in. The form
+        // ran in sign-up mode, so `values` carries `name`; re-validate to narrow.
+        await signUp(SignUpSchema.parse(values))
         await queryClient.invalidateQueries({ queryKey: sessionQueryKey })
         void navigate({ to: dest })
     }

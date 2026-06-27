@@ -20,6 +20,28 @@ export const WatchlistEntrySchema = z.object({
 })
 export type WatchlistEntry = z.infer<typeof WatchlistEntrySchema>
 
+// ── REST response shapes ─────────────────────────────────────────────────────
+// Returned by the watchlist endpoints and validated on the frontend, so the
+// contract lives in one place rather than being re-derived per consumer.
+
+/** `GET /watchlist/:id/status` — whether the movie is on the user's list. */
+export const WatchlistStatusSchema = z.object({ inWatchlist: z.boolean() })
+export type WatchlistStatus = z.infer<typeof WatchlistStatusSchema>
+
+/** `POST /watchlist` — the idempotent add result. */
+export const WatchlistAddResultSchema = z.object({
+    added: z.boolean(),
+    movieId: z.number().int(),
+})
+export type WatchlistAddResult = z.infer<typeof WatchlistAddResultSchema>
+
+/** `DELETE /watchlist/:id` — the idempotent remove result. */
+export const WatchlistRemoveResultSchema = z.object({
+    removed: z.boolean(),
+    movieId: z.number().int(),
+})
+export type WatchlistRemoveResult = z.infer<typeof WatchlistRemoveResultSchema>
+
 /** One movie in a `manage_watchlist` proposal. */
 export const ManageWatchlistMovieSchema = z.object({
     movieId: z.number().int().positive().describe('The TMDB movie id to add/remove.'),

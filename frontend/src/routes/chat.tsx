@@ -1,23 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { ChatWindow } from '../components/ChatWindow'
-import { RequireAuth } from '../components/RequireAuth'
+import { requireSession } from '../lib/auth'
 import { loadStoredConversationId, newConversationId, storeConversationId } from '../lib/chat'
 
 export const Route = createFileRoute('/chat')({
-    component: ChatRoute,
+    // The chat endpoint is auth-gated (the agent's tools are bound to the user).
+    // Guard before the component renders — cache-first, no flash of protected UI.
+    beforeLoad: ({ context, location }) => requireSession(context.queryClient, location.href),
+    component: ChatScreen,
 })
-
-function ChatRoute() {
-    // The chat endpoint is auth-gated (the agent's tools are bound to the user),
-    // so the screen requires a session. `useChat` is client-only, which suits the
-    // client-side guard.
-    return (
-        <RequireAuth redirect="/chat">
-            <ChatScreen />
-        </RequireAuth>
-    )
-}
 
 function ChatScreen() {
     // Resolve a stable conversation id on the client (localStorage isn't readable

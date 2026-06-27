@@ -7,8 +7,8 @@ import { SearchBar } from '../components/SearchBar'
 import { searchMoviesQueryOptions, trendingMoviesQueryOptions } from '../lib/movies'
 
 // `?q=` drives search; absent → trending. The trending grid is SSR-prefetched in
-// the loader (the same loader → ensureQueryData → useSuspenseQuery path the
-// scaffold proved), while search resolves on the client as the user queries.
+// the loader via best-effort `prefetchQuery` and read with `useQuery`, while
+// search resolves on the client as the user queries.
 const searchSchema = z.object({ q: z.string().optional() })
 
 export const Route = createFileRoute('/')({

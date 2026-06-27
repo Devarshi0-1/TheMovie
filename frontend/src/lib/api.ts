@@ -10,10 +10,16 @@ import { z } from 'zod'
 //     the server and the client; falls back to the dev backend), and
 //   - every request sends `credentials: 'include'` so BetterAuth's session
 //     cookie rides along (the two ports are same-site, so the cookie is sent).
+//
+// DEPLOY REQUIREMENT (AU-2/BSEC-2): this same-site assumption holds for the dev
+// ports and for a prod deploy where frontend + backend share a registrable
+// domain (e.g. app.x.com / api.x.com). If they end up on different domains, the
+// `SameSite=Lax` session cookie won't be sent on these XHRs and auth breaks —
+// the backend must then issue `SameSite=None; Secure` cookies. Keep them on one
+// site (or a same-origin proxy) unless that backend change is made.
 
-export const API_BASE = (
-    (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3100'
-).replace(/\/+$/, '')
+const envBase: string | undefined = import.meta.env.VITE_API_URL
+export const API_BASE = (envBase ?? 'http://localhost:3100').replace(/\/+$/, '')
 
 /** A typed failure from the API: carries the HTTP status and any Zod issues. */
 export class ApiError extends Error {
@@ -54,17 +60,17 @@ function tryJson(text: string): unknown {
 export async function apiFetch<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
     const url = path.startsWith('http') ? path : `${API_BASE}${path}`
 
+    // Normalize headers through `Headers` so any HeadersInit form (object,
+    // array, or Headers) merges correctly. Only declare a JSON body when one is
+    // actually sent, and never clobber a caller-supplied Content-Type.
+    const headers = new Headers(init.headers)
+    if (init.body != null && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json')
+    }
+
     let res: Response
     try {
-        res = await fetch(url, {
-            ...init,
-            credentials: 'include',
-            headers: {
-                // Only declare a JSON body when one is actually sent.
-                ...(init.body != null ? { 'Content-Type': 'application/json' } : {}),
-                ...init.headers,
-            },
-        })
+        res = await fetch(url, { ...init, credentials: 'include', headers })
     } catch (cause) {
         throw new ApiError('Network error — could not reach the server.', 0, cause)
     }
