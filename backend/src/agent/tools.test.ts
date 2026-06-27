@@ -2,11 +2,14 @@ import { describe, expect, it } from 'bun:test'
 import { retrievalTools } from './tools'
 
 describe('retrievalTools', () => {
-    it('exposes the retrieval + summary tools (feature)', () => {
+    it('exposes the retrieval + summary + lookup tools (feature)', () => {
         expect(Object.keys(retrievalTools).sort()).toEqual([
             'fetch_from_tmdb',
+            'find_movies_by_person',
+            'find_similar_movies',
             'get_movie_details',
             'get_trending',
+            'get_watch_providers',
             'search_movies_sql',
             'semantic_search_movies',
             'summarize_reviews',

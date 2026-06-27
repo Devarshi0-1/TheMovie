@@ -162,6 +162,39 @@ export const TrendingInputSchema = z.object({
 })
 export type TrendingInput = z.infer<typeof TrendingInputSchema>
 
+export const FindMoviesByPersonInputSchema = z.object({
+    name: z
+        .string()
+        .min(1)
+        .describe('A person’s name — an actor or director, e.g. "Christopher Nolan", "Zendaya".'),
+    limit: z.number().int().min(1).max(20).default(10).describe('Max movies to return.'),
+})
+export type FindMoviesByPersonInput = z.infer<typeof FindMoviesByPersonInputSchema>
+
+export const WatchProvidersInputSchema = z.object({
+    tmdbId: z
+        .number()
+        .int()
+        .positive()
+        .describe('The TMDB movie id to look up streaming/rent/buy options for.'),
+    region: z
+        .string()
+        .length(2)
+        .optional()
+        .describe('ISO 3166-1 country code, e.g. "US", "GB". Defaults to US.'),
+})
+export type WatchProvidersInput = z.infer<typeof WatchProvidersInputSchema>
+
+export const SimilarMoviesInputSchema = z.object({
+    tmdbId: z
+        .number()
+        .int()
+        .positive()
+        .describe('The TMDB movie id to find similar / recommended movies for.'),
+    limit: z.number().int().min(1).max(20).default(10).describe('Max movies to return.'),
+})
+export type SimilarMoviesInput = z.infer<typeof SimilarMoviesInputSchema>
+
 export const ReviewSummaryInputSchema = z.object({
     tmdbId: z
         .number()

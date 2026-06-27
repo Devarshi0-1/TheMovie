@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
     FetchFromTmdbInputSchema,
+    FindMoviesByPersonInputSchema,
     MovieDetailsInputSchema,
     MovieExtrasSchema,
     MovieResultSchema,
@@ -8,8 +9,10 @@ import {
     ReviewSummarySchema,
     ScoredMovieResultSchema,
     SemanticSearchInputSchema,
+    SimilarMoviesInputSchema,
     SqlSearchInputSchema,
     TrendingInputSchema,
+    WatchProvidersInputSchema,
     WatchProvidersSchema,
 } from './movie'
 
@@ -94,6 +97,24 @@ describe('tool input schemas', () => {
 
     it('Trending defaults limit to 10 (feature)', () => {
         expect(TrendingInputSchema.parse({}).limit).toBe(10)
+    })
+
+    it('FindMoviesByPerson requires a name, defaults limit to 10 (feature)', () => {
+        expect(FindMoviesByPersonInputSchema.parse({ name: 'Nolan' }).limit).toBe(10)
+        expect(() => FindMoviesByPersonInputSchema.parse({ name: '' })).toThrow()
+        expect(() => FindMoviesByPersonInputSchema.parse({})).toThrow()
+    })
+
+    it('WatchProviders requires a positive id and a 2-letter region (feature/edge)', () => {
+        expect(WatchProvidersInputSchema.parse({ tmdbId: 27205 }).region).toBeUndefined()
+        expect(WatchProvidersInputSchema.parse({ tmdbId: 27205, region: 'US' }).region).toBe('US')
+        expect(() => WatchProvidersInputSchema.parse({ tmdbId: 0 })).toThrow()
+        expect(() => WatchProvidersInputSchema.parse({ tmdbId: 27205, region: 'USA' })).toThrow()
+    })
+
+    it('SimilarMovies requires a positive id, defaults limit to 10 (feature)', () => {
+        expect(SimilarMoviesInputSchema.parse({ tmdbId: 27205 }).limit).toBe(10)
+        expect(() => SimilarMoviesInputSchema.parse({ tmdbId: -1 })).toThrow()
     })
 })
 
