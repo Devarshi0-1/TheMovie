@@ -3,8 +3,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 // Index-free keys for placeholders (max 12).
 const KEYS = ['sk0', 'sk1', 'sk2', 'sk3', 'sk4', 'sk5', 'sk6', 'sk7', 'sk8', 'sk9', 'sk10', 'sk11']
 
-// Shared so the loading grid and the real card grid stay pixel-aligned.
-export const POSTER_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5'
+// Shared so the loading grid and the real card grid stay pixel-aligned. Caps at
+// three richer cards per row (1 on mobile, 2 on small, 3 on large).
+export const POSTER_GRID_CLASS = 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3'
 
 interface PosterGridSkeletonProps {
     /** How many placeholder cards to render. */

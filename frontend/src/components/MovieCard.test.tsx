@@ -45,4 +45,24 @@ describe('<MovieCard />', () => {
         render(<MovieCard movie={{ ...movie, genres: [] }} />)
         expect(screen.queryAllByRole('listitem')).toHaveLength(0)
     })
+
+    // ── Rating + recommended signal ───────────────────────────────────────
+    it('shows the rating chip and a Recommended flag for a highly-rated movie', () => {
+        render(<MovieCard movie={{ ...movie, voteAverage: 8.4 }} />)
+        expect(screen.getByLabelText('Rated 8.4 out of 10')).toBeInTheDocument()
+        expect(screen.getByText('Recommended')).toBeInTheDocument()
+    })
+
+    it('shows the rating chip but no Recommended flag below the threshold (edge)', () => {
+        render(<MovieCard movie={{ ...movie, voteAverage: 6.9 }} />)
+        expect(screen.getByLabelText('Rated 6.9 out of 10')).toBeInTheDocument()
+        expect(screen.queryByText('Recommended')).not.toBeInTheDocument()
+    })
+
+    it('hides the rating chip when the score is missing or zero (edge: unrated)', () => {
+        render(<MovieCard movie={{ ...movie, voteAverage: 0 }} />)
+        expect(screen.queryByLabelText(/Rated/)).not.toBeInTheDocument()
+        render(<MovieCard movie={{ ...movie, voteAverage: null }} />)
+        expect(screen.queryByLabelText(/Rated/)).not.toBeInTheDocument()
+    })
 })

@@ -1,4 +1,5 @@
 import { ManageWatchlistInputSchema } from '@themovie/schemas'
+import { Check } from 'lucide-react'
 import { useState } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -157,8 +158,9 @@ export function WatchlistOutcome({ output }: { output: unknown }) {
     const verb = o.status === 'added' ? 'Added' : 'Removed'
     const prep = o.status === 'added' ? 'to' : 'from'
     return (
-        <div
-            className={HITL_DONE_CLASS}
-        >{`✓ ${verb} ${namesOf(o.movies) || 'them'} ${prep} your watchlist`}</div>
+        <div className={`${HITL_DONE_CLASS} flex items-center gap-2`}>
+            <Check className="size-4 shrink-0 text-pro" aria-hidden="true" />
+            {`${verb} ${namesOf(o.movies) || 'them'} ${prep} your watchlist`}
+        </div>
     )
 }
