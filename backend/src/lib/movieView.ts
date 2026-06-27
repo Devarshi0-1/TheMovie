@@ -53,7 +53,9 @@ interface TmdbListItemLike {
     overview?: string | null
     release_date?: string | null
     poster_path?: string | null
+    backdrop_path?: string | null
     genre_ids?: number[] | null
+    vote_average?: number | null
 }
 
 interface TmdbDetailLike extends TmdbListItemLike {
@@ -78,6 +80,8 @@ export function toMovieResult(raw: TmdbListItemLike): MovieResult | null {
         releaseDate: raw.release_date ?? null,
         genres: genreNames(raw.genre_ids),
         posterPath: raw.poster_path ?? null,
+        backdropPath: raw.backdrop_path ?? null,
+        voteAverage: typeof raw.vote_average === 'number' ? raw.vote_average : null,
     }
 }
 
