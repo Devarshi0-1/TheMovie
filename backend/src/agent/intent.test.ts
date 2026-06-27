@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'bun:test'
-import { runIntentGate, type IntentDeps } from './intent'
+import { buildClassifyPrompt, runIntentGate, type IntentDeps } from './intent'
 import type { IntentResult } from '@themovie/schemas'
 
 // Injected classifier — the gate is tested without any OpenAI call. Records the
-// queries it was asked to classify so we can assert it is (or isn't) invoked.
+// queries (and any context) it was asked to classify so we can assert it is (or
+// isn't) invoked and what it received.
 const stubDeps = (result: Partial<IntentResult>) => {
     const seen: string[] = []
+    const contexts: (string | undefined)[] = []
     const deps: IntentDeps = {
-        async classify(query) {
+        async classify(query, context) {
             seen.push(query)
+            contexts.push(context)
             return {
                 result: {
                     intent: 'search',
@@ -22,7 +25,7 @@ const stubDeps = (result: Partial<IntentResult>) => {
             }
         },
     }
-    return { deps, seen }
+    return { deps, seen, contexts }
 }
 
 describe('runIntentGate', () => {
@@ -68,5 +71,34 @@ describe('runIntentGate', () => {
         expect(decision.allowed).toBe(false)
         expect(decision.refusal).toBeTruthy()
         expect(seen).toHaveLength(0) // classifier never invoked
+    })
+
+    it('forwards prior-turn context to the classifier (feature: BAG-1)', async () => {
+        const { deps, contexts } = stubDeps({})
+        await runIntentGate('add the second one', deps, 'user: sci-fi from 2010')
+        expect(contexts[0]).toBe('user: sci-fi from 2010')
+    })
+
+    it('passes undefined context when none is supplied (edge: first turn unchanged)', async () => {
+        const { deps, contexts } = stubDeps({})
+        await runIntentGate('a heist movie', deps)
+        expect(contexts[0]).toBeUndefined()
+    })
+})
+
+describe('buildClassifyPrompt (BAG-1 context framing)', () => {
+    it('returns the bare query when there is no context (feature: unchanged first turn)', () => {
+        expect(buildClassifyPrompt('a heist movie')).toBe('a heist movie')
+    })
+
+    it('delimits context as reference-only and labels the latest message (feature)', () => {
+        const prompt = buildClassifyPrompt('add the second one', 'user: sci-fi from 2010')
+        expect(prompt).toContain('reference only')
+        expect(prompt).toContain('user: sci-fi from 2010')
+        expect(prompt).toContain('Latest message to classify:')
+        // The latest message comes after the context block (volatile content last).
+        expect(prompt.indexOf('user: sci-fi from 2010')).toBeLessThan(
+            prompt.indexOf('add the second one'),
+        )
     })
 })

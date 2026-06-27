@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import type { UIMessage } from 'ai'
 import {
+    buildGateContext,
     handleChat,
     loadConversationMessages,
     resolveConversationId,
@@ -89,21 +90,24 @@ const makeDeps = (
     store: ReturnType<typeof fakeStore>
     agent: ReturnType<typeof fakeAgent>
     gateCalls: number[]
+    gateContexts: (string | undefined)[]
 } => {
     const store = fakeStore(opts.history ?? [], opts.owner ?? null)
     const agent = fakeAgent()
     let idSeq = 0
     const gateCalls: number[] = []
+    const gateContexts: (string | undefined)[] = []
     const deps: ChatDeps = {
-        async gate() {
+        async gate(_query, context) {
             gateCalls.push(1)
+            gateContexts.push(context)
             return decision
         },
         runAgent: agent.runAgent,
         store: store.store,
         generateId: () => `gen-${idSeq++}`,
     }
-    return { deps, store, agent, gateCalls }
+    return { deps, store, agent, gateCalls, gateContexts }
 }
 
 const ctx = (over: Partial<ChatContext> = {}): ChatContext => ({
@@ -150,6 +154,67 @@ describe('handleChat — agent path', () => {
         const res = await handleChat(ctx({ conversationId: undefined }), deps)
         expect(res.headers.get('X-Conversation-Id')).toBe('gen-0')
         expect(store.saved[0]!.conversationId).toBe('gen-0')
+    })
+
+    it('feeds prior-turn context into the gate so follow-ups classify in context (BAG-1)', async () => {
+        const history = [
+            userMsg('recommend a sci-fi from 2010', 'old-u'),
+            {
+                id: 'old-a',
+                role: 'assistant',
+                parts: [{ type: 'text', text: 'Inception and Tron: Legacy.' }],
+            } as UIMessage,
+        ]
+        const { deps, gateContexts } = makeDeps(
+            { allowed: true, result: intentResult() },
+            { history },
+        )
+        await handleChat(
+            ctx({ conversationId: 'c1', messages: [userMsg('add the first one')] }),
+            deps,
+        )
+        expect(gateContexts[0]).toContain('user: recommend a sci-fi from 2010')
+        expect(gateContexts[0]).toContain('assistant: Inception and Tron: Legacy.')
+    })
+
+    it('passes no context on a first turn (edge: empty history → undefined)', async () => {
+        const { deps, gateContexts } = makeDeps({ allowed: true, result: intentResult() })
+        await handleChat(ctx(), deps)
+        expect(gateContexts[0]).toBeUndefined()
+    })
+})
+
+describe('buildGateContext (BAG-1 prior-turn window)', () => {
+    it('role-tags and joins the recent turns (feature)', () => {
+        const ctxStr = buildGateContext([
+            userMsg('find me a heist movie', 'a'),
+            {
+                id: 'b',
+                role: 'assistant',
+                parts: [{ type: 'text', text: 'How about Heat?' }],
+            } as UIMessage,
+        ])
+        expect(ctxStr).toBe('user: find me a heist movie\nassistant: How about Heat?')
+    })
+
+    it('returns undefined when there is no usable text history (edge)', () => {
+        expect(buildGateContext([])).toBeUndefined()
+        expect(
+            buildGateContext([{ id: 'x', role: 'assistant', parts: [] } as UIMessage]),
+        ).toBeUndefined()
+    })
+
+    it('keeps only the last 4 messages (edge: window bound)', () => {
+        const many = Array.from({ length: 7 }, (_v, i) => userMsg(`m${i}`, `id${i}`))
+        const ctxStr = buildGateContext(many)
+        expect(ctxStr).toBe('user: m3\nuser: m4\nuser: m5\nuser: m6')
+    })
+
+    it('truncates an over-long message (edge: per-message char bound)', () => {
+        const long = 'x'.repeat(500)
+        const ctxStr = buildGateContext([userMsg(long, 'a')])
+        expect(ctxStr!.length).toBeLessThan(300)
+        expect(ctxStr!.endsWith('…')).toBe(true)
     })
 })
 
