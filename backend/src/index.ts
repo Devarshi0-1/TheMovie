@@ -1,4 +1,5 @@
 import { app } from './app'
+import { startSummaryRefreshScheduler } from './jobs/scheduler'
 
 // Resolve the listen port from PORT. Plain `Number(PORT) || 3000` is wrong: it
 // treats the valid `PORT=0` (let the OS assign a free ephemeral port — common in
@@ -13,6 +14,12 @@ export function resolvePort(raw: string | undefined): number {
     }
     return n
 }
+
+// Start the background summary-refresh scheduler, but ONLY when this file is the
+// process entrypoint — importing it for `resolvePort` (see index.test.ts) must
+// not spin up timers or touch Redis. No-op unless SUMMARY_REFRESH_INTERVAL_HOURS
+// is set, so local/dev stays quiet by default.
+if (import.meta.main) startSummaryRefreshScheduler()
 
 // Server bootstrap. The Hono app lives in ./app so it can be imported by
 // tests without starting a listener.
