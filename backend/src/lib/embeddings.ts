@@ -2,6 +2,7 @@ import { openai } from '@ai-sdk/openai'
 import { embedMany } from 'ai'
 import { redis } from './redis'
 import { logUsage } from './usage'
+import type { ReviewSummary } from '@themovie/schemas'
 
 // OpenAI `text-embedding-3-small` — 1536-dim vectors, matching the
 // `embedding vector(1536)` column on the `movies` table (Phase 3.1). Single AI
@@ -118,6 +119,31 @@ export function composeEmbeddingText(movie: EmbeddableMovie): string {
     const keywords = normalizeLabels(movie.keywords)
     if (keywords.length) parts.push(`Keywords: ${keywords.join(', ')}`)
 
+    return parts.join('\n')
+}
+
+/**
+ * Compose the text embedded into the SEPARATE reception vector (Phase 8,
+ * Option B) from a movie's review summary — `vibe + pros + cons`. This captures
+ * *audience reception* ("audiences found it genuinely scary", "praised for
+ * practical effects", "divisive ending") — a signal the plot-based
+ * `composeEmbeddingText` document can't, since the overview never describes how
+ * the crowd received the film. Returns '' only when the summary is literally
+ * empty (no vibe, pros, or cons). The no-reviews PLACEHOLDER is skipped upstream
+ * (the caller never embeds when a movie has zero reviews) — this function stays
+ * purely mechanical and doesn't content-sniff for it.
+ */
+export function composeSummaryEmbeddingText(summary: ReviewSummary): string {
+    const vibe = summary.vibe?.trim() ?? ''
+    const pros = (summary.pros ?? []).map((p) => p.trim()).filter(Boolean)
+    const cons = (summary.cons ?? []).map((c) => c.trim()).filter(Boolean)
+
+    if (!vibe && !pros.length && !cons.length) return ''
+
+    const parts: string[] = []
+    if (vibe) parts.push(`Audience consensus: ${vibe}`)
+    if (pros.length) parts.push(`Audiences praised: ${pros.join(', ')}`)
+    if (cons.length) parts.push(`Audiences criticized: ${cons.join(', ')}`)
     return parts.join('\n')
 }
 

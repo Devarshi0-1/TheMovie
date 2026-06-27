@@ -50,6 +50,13 @@
       "when": 1782377363467,
       "tag": "0006_swap_genres_gin_index",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782572979608,
+      "tag": "0007_add_review_summary",
+      "breakpoints": true
     }
   ]
 }
