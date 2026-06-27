@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { Check, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useSession } from '../lib/auth'
@@ -93,7 +94,17 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
                 disabled={busy}
                 aria-pressed={inList}
             >
-                {busy ? '…' : inList ? '✓ On your watchlist' : '+ Add to watchlist'}
+                {busy ? (
+                    '…'
+                ) : inList ? (
+                    <>
+                        <Check data-icon aria-hidden="true" /> On your watchlist
+                    </>
+                ) : (
+                    <>
+                        <Plus data-icon aria-hidden="true" /> Add to watchlist
+                    </>
+                )}
             </Button>
             {failed && (
                 <p className="text-sm text-destructive" role="alert">

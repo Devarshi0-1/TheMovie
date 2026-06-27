@@ -1,5 +1,6 @@
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
+import { ArrowLeft } from 'lucide-react'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,7 +34,9 @@ export const Route = createFileRoute('/movie/$id')({
             </Alert>
             <p className="mt-4">
                 <Button asChild variant="link">
-                    <Link to="/">← Back to discovery</Link>
+                    <Link to="/">
+                        <ArrowLeft data-icon aria-hidden="true" /> Back to discovery
+                    </Link>
                 </Button>
             </p>
         </main>
@@ -43,7 +46,9 @@ export const Route = createFileRoute('/movie/$id')({
             <p className="text-muted-foreground">That movie isn’t a valid id.</p>
             <p className="mt-4">
                 <Button asChild variant="link">
-                    <Link to="/">← Back to discovery</Link>
+                    <Link to="/">
+                        <ArrowLeft data-icon aria-hidden="true" /> Back to discovery
+                    </Link>
                 </Button>
             </p>
         </main>
@@ -74,9 +79,9 @@ function MovieDetail() {
 
             <Link
                 to="/"
-                className="relative z-10 mb-6 inline-block text-sm text-muted-foreground hover:text-foreground"
+                className="relative z-10 mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
             >
-                ← Back to discovery
+                <ArrowLeft className="size-4" aria-hidden="true" /> Back to discovery
             </Link>
 
             <div className="relative z-10 grid grid-cols-1 gap-8 sm:grid-cols-[240px_1fr] sm:items-start">

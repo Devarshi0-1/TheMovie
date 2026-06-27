@@ -56,7 +56,7 @@ describe('<WatchlistButton />', () => {
         const spy = mockApi(false)
         renderWithProviders(<WatchlistButton {...PROPS} />, signedInClient())
 
-        const btn = await screen.findByRole('button', { name: '+ Add to watchlist' })
+        const btn = await screen.findByRole('button', { name: 'Add to watchlist' })
         fireEvent.click(btn)
 
         await waitFor(() =>
@@ -85,7 +85,7 @@ describe('<WatchlistButton />', () => {
         )
         renderWithProviders(<WatchlistButton {...PROPS} />, signedInClient())
 
-        fireEvent.click(await screen.findByRole('button', { name: '+ Add to watchlist' }))
+        fireEvent.click(await screen.findByRole('button', { name: 'Add to watchlist' }))
 
         await waitFor(() =>
             expect(toast.error).toHaveBeenCalledWith('Couldn’t add “Fight Club”. Try again.'),
@@ -97,7 +97,7 @@ describe('<WatchlistButton />', () => {
         mockApi(true)
         renderWithProviders(<WatchlistButton {...PROPS} />, signedInClient())
 
-        const btn = await screen.findByRole('button', { name: '✓ On your watchlist' })
+        const btn = await screen.findByRole('button', { name: 'On your watchlist' })
         expect(btn).toHaveAttribute('aria-pressed', 'true')
     })
 
@@ -106,7 +106,7 @@ describe('<WatchlistButton />', () => {
         const spy = mockApi(true)
         renderWithProviders(<WatchlistButton {...PROPS} />, signedInClient())
 
-        fireEvent.click(await screen.findByRole('button', { name: '✓ On your watchlist' }))
+        fireEvent.click(await screen.findByRole('button', { name: 'On your watchlist' }))
 
         await waitFor(() =>
             expect(
