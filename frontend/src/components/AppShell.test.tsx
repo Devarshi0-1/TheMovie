@@ -22,15 +22,19 @@ describe('<AppShell />', () => {
         expect(screen.getByRole('button', { name: 'Toggle Sidebar' })).toBeInTheDocument()
     })
 
-    it('exposes a focusable main landmark for the skip link', async () => {
+    it('exposes a focusable content region for the skip link (not a 2nd main)', async () => {
         const qc = makeTestQueryClient()
         qc.setQueryData(sessionQueryKey, null)
         const { container } = renderWithProviders(<AppShell />, qc)
         await screen.findByText('TheMovie')
 
-        const main = container.querySelector('main#main-content')
-        expect(main).not.toBeNull()
-        expect(main).toHaveAttribute('tabindex', '-1')
+        // The skip-link / focus target is a <div id="main-content"> — each route
+        // owns its own <main>, so the shell must not render a second <main>.
+        const region = container.querySelector('#main-content')
+        expect(region).not.toBeNull()
+        expect(region?.tagName).toBe('DIV')
+        expect(region).toHaveAttribute('tabindex', '-1')
+        expect(container.querySelector('main#main-content')).toBeNull()
     })
 
     // ── Edge cases ────────────────────────────────────────────────────────
