@@ -1,6 +1,6 @@
 import type { MovieResult } from '@themovie/schemas'
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../test/providers'
 import { MovieGrid } from './MovieGrid'
 
@@ -30,6 +30,18 @@ describe('<MovieGrid />', () => {
     it('shows an error message on failure', () => {
         render(<MovieGrid isError errorLabel="Could not load trending." />)
         expect(screen.getByRole('alert')).toHaveTextContent('Could not load trending.')
+    })
+
+    it('offers a Retry button that calls onRetry', () => {
+        const onRetry = vi.fn()
+        render(<MovieGrid isError errorLabel="Search failed." onRetry={onRetry} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+        expect(onRetry).toHaveBeenCalledOnce()
+    })
+
+    it('omits the Retry button when no onRetry is given', () => {
+        render(<MovieGrid isError errorLabel="Search failed." />)
+        expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
     })
 
     it('shows a custom empty state when there are no movies', () => {

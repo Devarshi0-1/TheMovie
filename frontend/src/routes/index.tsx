@@ -75,6 +75,7 @@ function Discover() {
                         isError={search.isError}
                         emptyLabel={`No movies match “${committed}”. Try another title.`}
                         errorLabel="Search failed. Please try again."
+                        onRetry={() => void search.refetch()}
                     />
                 ) : (
                     <MovieGrid
@@ -82,6 +83,7 @@ function Discover() {
                         isLoading={trending.isPending}
                         isError={trending.isError}
                         errorLabel="Couldn’t load trending right now. Please try again."
+                        onRetry={() => void trending.refetch()}
                     />
                 )}
             </section>
