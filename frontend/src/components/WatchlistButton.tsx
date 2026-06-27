@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { Button } from '@/components/ui/button'
 import { useSession } from '../lib/auth'
 import {
     useAddToWatchlist,
@@ -29,21 +30,19 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
 
     if (sessionPending) {
         return (
-            <button type="button" className="wl-btn" disabled>
+            <Button type="button" disabled>
                 …
-            </button>
+            </Button>
         )
     }
 
     if (!signedIn) {
         return (
-            <Link
-                to="/signin"
-                search={{ redirect: `/movie/${movieId}` }}
-                className="wl-btn wl-btn--ghost"
-            >
-                Sign in to save
-            </Link>
+            <Button asChild variant="outline">
+                <Link to="/signin" search={{ redirect: `/movie/${movieId}` }}>
+                    Sign in to save
+                </Link>
+            </Button>
         )
     }
 
@@ -57,18 +56,18 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
     }
 
     return (
-        <div className="wl-btn-wrap">
-            <button
+        <div className="flex flex-col items-start gap-2">
+            <Button
                 type="button"
-                className={inList ? 'wl-btn wl-btn--active' : 'wl-btn'}
+                variant={inList ? 'outline' : 'default'}
                 onClick={toggle}
                 disabled={busy}
                 aria-pressed={inList}
             >
                 {busy ? '…' : inList ? '✓ On your watchlist' : '+ Add to watchlist'}
-            </button>
+            </Button>
             {failed && (
-                <p className="wl-btn__error" role="alert">
+                <p className="text-sm text-destructive" role="alert">
                     Couldn’t update your watchlist. Try again.
                 </p>
             )}

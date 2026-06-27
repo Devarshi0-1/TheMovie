@@ -1,4 +1,7 @@
 import { useId } from 'react'
+import { X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface SearchBarProps {
     value: string
@@ -17,20 +20,19 @@ export function SearchBar({ value, onChange, onSubmit, placeholder, busy }: Sear
     const id = useId()
 
     return (
-        <search className="searchbar">
+        <search>
             <form
                 onSubmit={(e) => {
                     e.preventDefault()
                     onSubmit()
                 }}
             >
-                <label className="searchbar__label" htmlFor={id}>
+                <label className="sr-only" htmlFor={id}>
                     Search movies
                 </label>
-                <div className="searchbar__row">
-                    <input
+                <div className="flex max-w-[560px] items-center gap-2">
+                    <Input
                         id={id}
-                        className="searchbar__input"
                         type="search"
                         value={value}
                         onChange={(e) => onChange(e.target.value)}
@@ -38,18 +40,19 @@ export function SearchBar({ value, onChange, onSubmit, placeholder, busy }: Sear
                         autoComplete="off"
                     />
                     {value && (
-                        <button
+                        <Button
                             type="button"
-                            className="searchbar__clear"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => onChange('')}
                             aria-label="Clear search"
                         >
-                            ×
-                        </button>
+                            <X />
+                        </Button>
                     )}
-                    <button type="submit" className="searchbar__submit" disabled={busy}>
+                    <Button type="submit" disabled={busy}>
                         {busy ? 'Searching…' : 'Search'}
-                    </button>
+                    </Button>
                 </div>
             </form>
         </search>

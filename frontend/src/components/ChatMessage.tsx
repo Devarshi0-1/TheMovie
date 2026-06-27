@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils'
 import {
     isToolPart,
     MANAGE_WATCHLIST,
@@ -22,9 +23,11 @@ export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
     const isUser = message.role === 'user'
 
     return (
-        <div className={isUser ? 'msg msg--user' : 'msg msg--assistant'}>
-            <div className="msg__role">{isUser ? 'You' : 'TheMovie'}</div>
-            <div className="msg__body">
+        <div className={cn('flex max-w-[85%] flex-col gap-1', isUser && 'items-end self-end')}>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                {isUser ? 'You' : 'TheMovie'}
+            </div>
+            <div className="flex flex-col gap-2">
                 {message.parts.map((part, index) => {
                     // Tool parts have a stable id; other parts (text, reasoning,
                     // step) have none, so key on type + index — stable for the
@@ -35,7 +38,15 @@ export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
 
                     if (part.type === 'text') {
                         return part.text ? (
-                            <p key={key} className="msg__text">
+                            <p
+                                key={key}
+                                className={cn(
+                                    'm-0 whitespace-pre-wrap rounded-xl border px-3.5 py-2.5 leading-relaxed',
+                                    isUser
+                                        ? 'border-primary/25 bg-accent-soft'
+                                        : 'border-border bg-muted',
+                                )}
+                            >
                                 {part.text}
                             </p>
                         ) : null

@@ -1,6 +1,10 @@
 import { useForm, type AnyFieldApi } from '@tanstack/react-form'
 import { useState } from 'react'
 import { z } from 'zod'
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { SignInSchema, SignUpSchema, type SignInValues, type SignUpValues } from '../lib/auth'
 
 type AuthMode = 'signin' | 'signup'
@@ -46,7 +50,6 @@ export function AuthForm({ mode, onSubmit }: AuthFormProps) {
 
     return (
         <form
-            className="authform"
             noValidate
             onSubmit={(e) => {
                 e.preventDefault()
@@ -54,46 +57,50 @@ export function AuthForm({ mode, onSubmit }: AuthFormProps) {
                 void form.handleSubmit()
             }}
         >
-            {isSignup && (
-                <form.Field name="name">
+            <FieldGroup>
+                {isSignup && (
+                    <form.Field name="name">
+                        {(field) => (
+                            <AuthField field={field} label="Name" type="text" autoComplete="name" />
+                        )}
+                    </form.Field>
+                )}
+                <form.Field name="email">
                     {(field) => (
-                        <Field field={field} label="Name" type="text" autoComplete="name" />
+                        <AuthField field={field} label="Email" type="email" autoComplete="email" />
                     )}
                 </form.Field>
-            )}
-            <form.Field name="email">
-                {(field) => <Field field={field} label="Email" type="email" autoComplete="email" />}
-            </form.Field>
-            <form.Field name="password">
-                {(field) => (
-                    <Field
-                        field={field}
-                        label="Password"
-                        type="password"
-                        autoComplete={isSignup ? 'new-password' : 'current-password'}
-                    />
-                )}
-            </form.Field>
+                <form.Field name="password">
+                    {(field) => (
+                        <AuthField
+                            field={field}
+                            label="Password"
+                            type="password"
+                            autoComplete={isSignup ? 'new-password' : 'current-password'}
+                        />
+                    )}
+                </form.Field>
 
-            {formError && (
-                <p className="authform__error" role="alert">
-                    {formError}
-                </p>
-            )}
-
-            <form.Subscribe selector={(s) => s.isSubmitting}>
-                {(isSubmitting) => (
-                    <button type="submit" className="authform__submit" disabled={isSubmitting}>
-                        {isSubmitting
-                            ? isSignup
-                                ? 'Creating account…'
-                                : 'Signing in…'
-                            : isSignup
-                              ? 'Create account'
-                              : 'Sign in'}
-                    </button>
+                {formError && (
+                    <Alert variant="destructive" role="alert">
+                        {formError}
+                    </Alert>
                 )}
-            </form.Subscribe>
+
+                <form.Subscribe selector={(s) => s.isSubmitting}>
+                    {(isSubmitting) => (
+                        <Button type="submit" className="w-full" disabled={isSubmitting}>
+                            {isSubmitting
+                                ? isSignup
+                                    ? 'Creating account…'
+                                    : 'Signing in…'
+                                : isSignup
+                                  ? 'Create account'
+                                  : 'Sign in'}
+                        </Button>
+                    )}
+                </form.Subscribe>
+            </FieldGroup>
         </form>
     )
 }
@@ -106,7 +113,7 @@ interface FieldProps {
 }
 
 /** One labelled input wired to a TanStack Form field, with its validation error. */
-function Field({ field, label, type, autoComplete }: FieldProps) {
+function AuthField({ field, label, type, autoComplete }: FieldProps) {
     const firstError = field.state.meta.errors[0]
     const message: string | undefined = !firstError
         ? undefined
@@ -116,27 +123,20 @@ function Field({ field, label, type, autoComplete }: FieldProps) {
     const errorId = `${field.name}-error`
 
     return (
-        <div className="authform__field">
-            <label className="authform__label" htmlFor={field.name}>
-                {label}
-            </label>
-            <input
+        <Field data-invalid={message ? true : undefined}>
+            <FieldLabel htmlFor={field.name}>{label}</FieldLabel>
+            <Input
                 id={field.name}
                 name={field.name}
                 type={type}
                 autoComplete={autoComplete}
-                className="authform__input"
                 value={field.state.value}
                 onChange={(e) => field.handleChange(e.target.value)}
                 onBlur={field.handleBlur}
                 aria-invalid={message ? true : undefined}
                 aria-describedby={message ? errorId : undefined}
             />
-            {message && (
-                <p id={errorId} className="authform__field-error" role="alert">
-                    {message}
-                </p>
-            )}
-        </div>
+            {message && <FieldError id={errorId}>{message}</FieldError>}
+        </Field>
     )
 }

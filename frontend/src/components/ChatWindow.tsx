@@ -1,6 +1,9 @@
 import { useChat } from '@ai-sdk/react'
 import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import { useEffect, useRef } from 'react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from '@/components/ui/empty'
 import {
     createChatTransport,
     fetchConversationMessages,
@@ -79,27 +82,32 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
     }, [messages])
 
     return (
-        <div className="chat">
-            <div className="chat__scroll">
+        <div className="flex h-[min(70vh,640px)] flex-col overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
                 {messages.length === 0 ? (
-                    <div className="chat__empty">
-                        <p className="chat__empty-lede">
-                            Ask in plain language — I’ll search the catalog, reason over themes, and
-                            help you manage your watchlist.
-                        </p>
-                        <div className="chat__suggestions">
-                            {SUGGESTIONS.map((text) => (
-                                <button
-                                    key={text}
-                                    type="button"
-                                    className="chat__suggestion"
-                                    onClick={() => void sendMessage({ text })}
-                                >
-                                    {text}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    <Empty>
+                        <EmptyHeader>
+                            <EmptyDescription>
+                                Ask in plain language — I’ll search the catalog, reason over themes,
+                                and help you manage your watchlist.
+                            </EmptyDescription>
+                        </EmptyHeader>
+                        <EmptyContent>
+                            <div className="flex flex-wrap justify-center gap-2.5">
+                                {SUGGESTIONS.map((text) => (
+                                    <Button
+                                        key={text}
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => void sendMessage({ text })}
+                                    >
+                                        {text}
+                                    </Button>
+                                ))}
+                            </div>
+                        </EmptyContent>
+                    </Empty>
                 ) : (
                     messages.map((message) => (
                         <ChatMessage
@@ -111,12 +119,19 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
                 )}
 
                 {error && (
-                    <div className="chat__error" role="alert">
-                        <span>Something went wrong while answering.</span>
-                        <button type="button" onClick={() => void regenerate()}>
-                            Retry
-                        </button>
-                    </div>
+                    <Alert variant="destructive">
+                        <AlertTitle>Something went wrong while answering.</AlertTitle>
+                        <AlertDescription>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void regenerate()}
+                            >
+                                Retry
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 )}
 
                 <div ref={endRef} />

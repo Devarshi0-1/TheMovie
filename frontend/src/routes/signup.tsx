@@ -36,13 +36,18 @@ function SignUp() {
     }
 
     return (
-        <main className="page auth">
-            <div className="auth__card">
-                <h1 className="auth__title">Create your account</h1>
-                <p className="auth__sub">Save films, build a watchlist, and get recommendations.</p>
+        <main className="mx-auto grid min-h-[70vh] w-full max-w-[1100px] place-items-center px-6 py-10">
+            <div className="w-full max-w-[400px] rounded-xl border border-border bg-card p-8">
+                <h1 className="text-2xl font-semibold tracking-tight">Create your account</h1>
+                <p className="mt-1.5 mb-6 text-sm text-muted-foreground">
+                    Save films, build a watchlist, and get recommendations.
+                </p>
                 <AuthForm mode="signup" onSubmit={handleSubmit} />
-                <p className="auth__alt">
-                    Already have an account? <Link to="/signin">Sign in</Link>
+                <p className="mt-5 text-center text-sm text-muted-foreground">
+                    Already have an account?{' '}
+                    <Link to="/signin" className="text-primary underline-offset-4 hover:underline">
+                        Sign in
+                    </Link>
                 </p>
             </div>
         </main>

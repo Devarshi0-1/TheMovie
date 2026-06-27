@@ -1,7 +1,13 @@
 import { ManageWatchlistInputSchema } from '@themovie/schemas'
 import { useState } from 'react'
+import { Alert } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import type { ManageWatchlistMovie, ManageWatchlistOutput } from '../lib/chat'
 import { useAddToWatchlist, useRemoveFromWatchlist } from '../lib/watchlist'
+
+/** Shared presentation for a settled `manage_watchlist` outcome line. */
+const HITL_DONE_CLASS =
+    'self-start max-w-full rounded-xl border border-dashed border-border bg-transparent p-4 text-sm text-muted-foreground'
 
 /**
  * Human-in-the-loop confirmation for the agent's `manage_watchlist` proposal.
@@ -27,9 +33,9 @@ export function WatchlistConfirm({
     const parsed = ManageWatchlistInputSchema.safeParse(input)
     if (!parsed.success) {
         return (
-            <div className="hitl hitl--error" role="alert">
+            <Alert variant="destructive" className="max-w-full self-start">
                 The assistant proposed an invalid watchlist change, so nothing was done.
-            </div>
+            </Alert>
         )
     }
 
@@ -97,36 +103,31 @@ export function WatchlistConfirm({
             : 'Yes, remove it'
 
     return (
-        <div className="hitl">
-            <p className="hitl__prompt">
+        <div className="max-w-full self-start rounded-xl border border-primary bg-accent-soft p-4">
+            <p className="mb-3 leading-relaxed">
                 {action === 'add' ? 'Add' : 'Remove'}{' '}
                 {many ? `these ${movies.length} movies` : <strong>{nameOf(movies[0]!)}</strong>}{' '}
                 {action === 'add' ? 'to' : 'from'} your watchlist?
             </p>
             {many && (
-                <ul className="hitl__list">
+                <ul className="mb-3 max-h-44 list-disc overflow-y-auto pl-5 text-sm leading-relaxed text-foreground">
                     {movies.map((m) => (
                         <li key={m.movieId}>{nameOf(m)}</li>
                     ))}
                 </ul>
             )}
             {error && (
-                <p className="hitl__error" role="alert">
+                <p className="mb-2 text-sm text-destructive" role="alert">
                     {error}
                 </p>
             )}
-            <div className="hitl__actions">
-                <button
-                    type="button"
-                    className="hitl__approve"
-                    onClick={() => void approve()}
-                    disabled={busy}
-                >
+            <div className="flex gap-2.5">
+                <Button type="button" onClick={() => void approve()} disabled={busy}>
                     {approveLabel}
-                </button>
-                <button type="button" className="hitl__deny" onClick={deny} disabled={busy}>
+                </Button>
+                <Button type="button" variant="outline" onClick={deny} disabled={busy}>
                     No
-                </button>
+                </Button>
             </div>
         </div>
     )
@@ -137,7 +138,7 @@ export function WatchlistOutcome({ output }: { output: unknown }) {
     const o = output as Partial<ManageWatchlistOutput> | null
     if (!o || typeof o.status !== 'string') return null
     if (o.status === 'declined') {
-        return <div className="hitl hitl--done">You declined the change</div>
+        return <div className={HITL_DONE_CLASS}>You declined the change</div>
     }
     const namesOf = (list: ManageWatchlistMovie[] | undefined) =>
         (list ?? []).map((m) => m.title ?? `movie ${m.movieId}`).join(', ')
@@ -145,7 +146,7 @@ export function WatchlistOutcome({ output }: { output: unknown }) {
     if (o.status === 'partial') {
         const verb = o.action === 'add' ? 'Added' : 'Removed'
         return (
-            <div className="hitl hitl--done">
+            <div className={HITL_DONE_CLASS}>
                 {`${verb} ${namesOf(o.movies) || 'some'}; couldn’t update ${
                     namesOf(o.failed) || 'the rest'
                 } — try again`}
@@ -156,6 +157,8 @@ export function WatchlistOutcome({ output }: { output: unknown }) {
     const verb = o.status === 'added' ? 'Added' : 'Removed'
     const prep = o.status === 'added' ? 'to' : 'from'
     return (
-        <div className="hitl hitl--done">{`✓ ${verb} ${namesOf(o.movies) || 'them'} ${prep} your watchlist`}</div>
+        <div
+            className={HITL_DONE_CLASS}
+        >{`✓ ${verb} ${namesOf(o.movies) || 'them'} ${prep} your watchlist`}</div>
     )
 }

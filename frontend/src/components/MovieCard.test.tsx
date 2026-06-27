@@ -39,7 +39,7 @@ describe('<MovieCard />', () => {
     })
 
     it('renders no genre chips when the list is empty', () => {
-        const { container } = render(<MovieCard movie={{ ...movie, genres: [] }} />)
-        expect(container.querySelectorAll('.movie-card__genres li')).toHaveLength(0)
+        render(<MovieCard movie={{ ...movie, genres: [] }} />)
+        expect(screen.queryAllByRole('listitem')).toHaveLength(0)
     })
 })

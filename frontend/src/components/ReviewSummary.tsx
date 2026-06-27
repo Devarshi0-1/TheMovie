@@ -1,4 +1,5 @@
 import type { ReviewSummary as ReviewSummaryData } from '@themovie/schemas'
+import { Badge } from '@/components/ui/badge'
 
 /**
  * Renders the spoiler-free AI summary of a movie's audience reviews
@@ -11,19 +12,24 @@ export function ReviewSummary({ summary }: { summary: ReviewSummaryData }) {
     const hasDetail = pros.length > 0 || cons.length > 0
 
     return (
-        <section className="summary" aria-label="Spoiler-free review summary">
-            <div className="summary__head">
-                <h2 className="summary__title">What audiences say</h2>
-                <span className="summary__badge">AI · spoiler-free</span>
+        <section
+            className="max-w-[720px] rounded-2xl border border-border bg-card p-6"
+            aria-label="Spoiler-free review summary"
+        >
+            <div className="mb-3 flex items-center gap-3">
+                <h2 className="text-lg font-semibold">What audiences say</h2>
+                <Badge variant="secondary">AI · spoiler-free</Badge>
             </div>
-            <p className="summary__vibe">{vibe}</p>
+            <p className="mb-5 text-base leading-relaxed">{vibe}</p>
 
             {hasDetail && (
-                <div className="summary__cols">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     {pros.length > 0 && (
-                        <div className="summary__col">
-                            <h3 className="summary__col-title summary__col-title--pro">Loved</h3>
-                            <ul className="summary__list">
+                        <div>
+                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-pro">
+                                Loved
+                            </h3>
+                            <ul className="list-disc pl-5 text-sm leading-relaxed text-muted-foreground">
                                 {pros.map((pro) => (
                                     <li key={pro}>{pro}</li>
                                 ))}
@@ -31,11 +37,11 @@ export function ReviewSummary({ summary }: { summary: ReviewSummaryData }) {
                         </div>
                     )}
                     {cons.length > 0 && (
-                        <div className="summary__col">
-                            <h3 className="summary__col-title summary__col-title--con">
+                        <div>
+                            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-con">
                                 Critiqued
                             </h3>
-                            <ul className="summary__list">
+                            <ul className="list-disc pl-5 text-sm leading-relaxed text-muted-foreground">
                                 {cons.map((con) => (
                                     <li key={con}>{con}</li>
                                 ))}

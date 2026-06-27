@@ -43,13 +43,15 @@ function Discover() {
     }
 
     return (
-        <main className="page">
-            <header className="hero">
-                <p className="hero__eyebrow">TheMovie</p>
-                <h1 className="hero__title">
+        <main className="mx-auto w-full max-w-[1100px] px-6 py-10">
+            <header className="mb-12">
+                <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+                    TheMovie
+                </p>
+                <h1 className="mb-4 max-w-[18ch] text-4xl font-semibold leading-[1.05] tracking-tight [&_em]:not-italic [&_em]:text-primary sm:text-5xl">
                     Find a film by <em>describing</em> it, not naming it.
                 </h1>
-                <p className="hero__lede">
+                <p className="mb-8 max-w-[56ch] text-lg leading-relaxed text-muted-foreground">
                     Search the catalog or browse what’s trending. The conversational agent goes
                     deeper — it’s coming next.
                 </p>
@@ -62,11 +64,8 @@ function Discover() {
                 />
             </header>
 
-            <section
-                className="results"
-                aria-label={isSearching ? 'Search results' : 'Trending movies'}
-            >
-                <h2 className="section-title">
+            <section aria-label={isSearching ? 'Search results' : 'Trending movies'}>
+                <h2 className="mb-6 text-xl font-semibold tracking-tight">
                     {isSearching ? `Results for “${committed}”` : 'Trending now'}
                 </h2>
                 {isSearching ? (
