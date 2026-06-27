@@ -53,21 +53,32 @@ export const user = pgTable('user', {
         .$onUpdate(() => new Date()),
 })
 
-export const session = pgTable('session', {
-    id: text('id').primaryKey(),
-    expiresAt: timestamp('expires_at').notNull(),
-    token: text('token').notNull(),
-    userId: text('user_id')
-        .notNull()
-        .references(() => user.id, { onDelete: 'cascade' }),
-    ipAddress: text('ip_address'),
-    userAgent: text('user_agent'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
-        .notNull()
-        .defaultNow()
-        .$onUpdate(() => new Date()),
-})
+export const session = pgTable(
+    'session',
+    {
+        id: text('id').primaryKey(),
+        expiresAt: timestamp('expires_at').notNull(),
+        token: text('token').notNull(),
+        userId: text('user_id')
+            .notNull()
+            .references(() => user.id, { onDelete: 'cascade' }),
+        ipAddress: text('ip_address'),
+        userAgent: text('user_agent'),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at')
+            .notNull()
+            .defaultNow()
+            .$onUpdate(() => new Date()),
+    },
+    (t) => [
+        // BetterAuth validates the session by `token` on every authed request —
+        // make it unique (also indexes it) so that lookup isn't a seq scan.
+        unique('session_token_unique').on(t.token),
+        // Postgres doesn't auto-index FKs; this one is hit on session resolution
+        // and user-cascade deletes.
+        index('session_user_idx').on(t.userId),
+    ],
+)
 
 export const account = pgTable('account', {
     id: text('id').primaryKey(),
@@ -88,7 +99,11 @@ export const account = pgTable('account', {
         .notNull()
         .defaultNow()
         .$onUpdate(() => new Date()),
-})
+}, (t) => [
+    // FK + the provider/account lookup BetterAuth runs during sign-in.
+    index('account_user_idx').on(t.userId),
+    index('account_provider_idx').on(t.providerId, t.accountId),
+])
 
 export const verification = pgTable('verification', {
     id: text('id').primaryKey(),
@@ -184,6 +199,9 @@ export const movies = pgTable(
             'hnsw',
             t.reviewSummaryEmbedding.op('vector_cosine_ops'),
         ),
+        // The refresh job scans for due summaries by `review_summary_at`
+        // (NULL or older than the cutoff); index it so that isn't a full scan.
+        index('movies_review_summary_at_idx').on(t.reviewSummaryAt),
     ],
 )
 
