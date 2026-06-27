@@ -1,13 +1,14 @@
 import { queryOptions } from '@tanstack/react-query'
 import {
+    MovieDetailViewSchema,
     MovieResultSchema,
     ReviewSummarySchema,
+    type MovieDetailView,
     type MovieResult,
     type ReviewSummary,
 } from '@themovie/schemas'
 import { z } from 'zod'
 import { apiFetch } from './api'
-import { parseMovieDetails, parseMovieList, type DetailMovie } from './tmdb'
 
 // The frontend validates every movie payload it receives against the SAME Zod
 // schema the backend uses for API responses and AI tool I/O. One definition in
@@ -48,13 +49,13 @@ export function releaseYear(movie: MovieResult): string {
 }
 
 // ── Live movie queries (TanStack Query) ─────────────────────────────────────
-// The movie endpoints proxy TMDB and return TMDB's raw snake_case shapes, so
-// every queryFn pipes the response through the `tmdb` mapper to land on the
-// shared `MovieResult` / detail display shapes. Trending is SSR-prefetched in
-// the discovery route loader; the rest resolve on demand.
+// The movie endpoints now return the shared camelCase shapes (the backend maps
+// TMDB → `MovieResult` / `MovieDetailView`), so every queryFn just validates the
+// response against the shared schema. Trending is SSR-prefetched in the
+// discovery route loader; the rest resolve on demand.
 
 export async function fetchTrending(): Promise<MovieResult[]> {
-    return parseMovieList(await apiFetch('/api/v1/movies/trending'))
+    return parseMovies(await apiFetch('/api/v1/movies/trending'))
 }
 
 export const trendingMoviesQueryOptions = queryOptions({
@@ -63,7 +64,7 @@ export const trendingMoviesQueryOptions = queryOptions({
 })
 
 export async function searchMovies(query: string): Promise<MovieResult[]> {
-    return parseMovieList(await apiFetch(`/api/v1/movies/search?q=${encodeURIComponent(query)}`))
+    return parseMovies(await apiFetch(`/api/v1/movies/search?q=${encodeURIComponent(query)}`))
 }
 
 export function searchMoviesQueryOptions(query: string) {
@@ -76,8 +77,8 @@ export function searchMoviesQueryOptions(query: string) {
     })
 }
 
-export async function fetchMovieDetails(id: number): Promise<DetailMovie> {
-    return parseMovieDetails(await apiFetch(`/api/v1/movies/${id}`))
+export async function fetchMovieDetails(id: number): Promise<MovieDetailView> {
+    return MovieDetailViewSchema.parse(await apiFetch(`/api/v1/movies/${id}`))
 }
 
 export function movieDetailsQueryOptions(id: number) {

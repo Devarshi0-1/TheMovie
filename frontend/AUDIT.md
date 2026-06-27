@@ -10,7 +10,7 @@
 >
 > **Two items remain, with reasons:**
 >
-> - **DL-10** (TMDB mapper dedup) can't be fixed frontend-only — the backend's movie endpoints leak raw TMDB snake_case that the frontend maps; the real fix is making those endpoints return `MovieResult` and deleting the frontend mapper. Folded into the **backend PR**.
+> - ~~**DL-10** (TMDB mapper dedup)~~ — **done** in PR `feat/movie-endpoints-movieresult`: the backend movie endpoints now return the shared camelCase `MovieResult` / `MovieDetailView` (mapping moved to `backend/lib/movieView`), and the frontend mapper in `lib/tmdb.ts` was deleted — `lib/movies.ts` just validates against the shared schemas now. `lib/tmdb.ts` keeps only the image-CDN bases + `formatRuntime`.
 > - **LT-6** (React Compiler) — attempted, but on Vite 8 + `@vitejs/plugin-react` v6 it needs the rolldown `reactCompilerPreset` via `@rolldown/plugin-babel` (0.1.x). That's a bleeding-edge integration deserving its own change with build + SSR verification, not a NIT bundle. Deferred.
 >
 > Tooling note: D1/tsgo for `@themovie/schemas` is deferred to the backend PR (still `tsc`); the shared `tsconfig.base.json` (D3) is created here and adopted by the backend there.
