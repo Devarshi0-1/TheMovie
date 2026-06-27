@@ -9,6 +9,7 @@
 > **Status (PR `fix/frontend-audit-findings`):** all reported findings addressed **except** the Tailwind v4 + shadcn migration (D4 — its own follow-up PR) and two items below. NITs now done in the second pass: TS-4 (SSR/browser API base split), CC-4 (stabler message-part keys), CC-7 (sr-only composer label), XC-5 (streaming-UI test), XC-6 (busy-state + WatchlistOutcome-branch tests).
 >
 > **Two items remain, with reasons:**
+>
 > - **DL-10** (TMDB mapper dedup) can't be fixed frontend-only — the backend's movie endpoints leak raw TMDB snake_case that the frontend maps; the real fix is making those endpoints return `MovieResult` and deleting the frontend mapper. Folded into the **backend PR**.
 > - **LT-6** (React Compiler) — attempted, but on Vite 8 + `@vitejs/plugin-react` v6 it needs the rolldown `reactCompilerPreset` via `@rolldown/plugin-babel` (0.1.x). That's a bleeding-edge integration deserving its own change with build + SSR verification, not a NIT bundle. Deferred.
 >
