@@ -1,13 +1,17 @@
 import { tool } from 'ai'
 import {
     FetchFromTmdbInputSchema,
+    FindMoviesByPersonInputSchema,
     MovieDetailsInputSchema,
     ReviewSummaryInputSchema,
     SemanticSearchInputSchema,
+    SimilarMoviesInputSchema,
     SqlSearchInputSchema,
     TrendingInputSchema,
+    WatchProvidersInputSchema,
 } from '@themovie/schemas'
 import { summarizeReviews } from '../lib/summary'
+import { findMoviesByPerson, findSimilarMovies, getWatchProviders } from './lookups'
 import {
     fetchFromTmdb,
     getMovieDetails,
@@ -79,6 +83,36 @@ const summarizeReviewsTool = tool({
     execute: (input) => summarizeReviews(input.tmdbId),
 })
 
+const findMoviesByPersonTool = tool({
+    description:
+        'Find movies associated with a PERSON by name — an actor or director. Use for "movies starring ' +
+        'Zendaya", "what has Christopher Nolan directed", "films with Tom Hardy". Returns their most ' +
+        'notable movies (acting + directing credits, ranked by popularity). Do NOT use for movie titles — ' +
+        'this resolves a person, not a film.',
+    inputSchema: FindMoviesByPersonInputSchema,
+    execute: (input) => findMoviesByPerson(input),
+})
+
+const getWatchProvidersTool = tool({
+    description:
+        'Where a SPECIFIC movie can be watched — streaming (subscription), rent, or buy — by TMDB id, ' +
+        'for a region (default US). Use when the user asks "where can I watch / stream X", "is X on ' +
+        'Netflix". Identify the movie via search first to get its tmdbId. Returns null when there are no ' +
+        'offers in that region.',
+    inputSchema: WatchProvidersInputSchema,
+    execute: (input) => getWatchProviders(input),
+})
+
+const findSimilarMoviesTool = tool({
+    description:
+        'Get TMDB’s "more like this" recommendations for a SPECIFIC movie by tmdbId. Use for "movies like ' +
+        'Inception", "what should I watch after X". This is the curated TMDB recommendation graph; for ' +
+        'free-form thematic similarity ("films where the hero becomes the villain") use ' +
+        'semantic_search_movies instead. Identify the movie via search first to get its tmdbId.',
+    inputSchema: SimilarMoviesInputSchema,
+    execute: (input) => findSimilarMovies(input),
+})
+
 /** The retrieval toolset the agent loop exposes to the model. */
 export const retrievalTools = {
     search_movies_sql: searchMoviesSqlTool,
@@ -87,6 +121,9 @@ export const retrievalTools = {
     get_movie_details: getMovieDetailsTool,
     get_trending: getTrendingTool,
     summarize_reviews: summarizeReviewsTool,
+    find_movies_by_person: findMoviesByPersonTool,
+    get_watch_providers: getWatchProvidersTool,
+    find_similar_movies: findSimilarMoviesTool,
 }
 
 export type RetrievalToolName = keyof typeof retrievalTools

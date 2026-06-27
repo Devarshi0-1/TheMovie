@@ -207,6 +207,39 @@ export const getMovieExtras = (
         ),
     )
 
+// ── Person lookups (Phase 9 — "movies starring X") ───────────────────────────
+// Find a person by name, then pull their movie filmography. Powers the agent's
+// find_movies_by_person tool. Both are cached like everything else.
+
+type SearchPersonResponse =
+    paths['/3/search/person']['get']['responses']['200']['content']['application/json']
+type PersonMovieCreditsResponse =
+    paths['/3/person/{person_id}/movie_credits']['get']['responses']['200']['content']['application/json']
+
+export type PersonSearchResult = NonNullable<SearchPersonResponse['results']>[number]
+export type PersonMovieCredits = PersonMovieCreditsResponse
+
+export const searchPerson = (
+    query: string,
+    cache: TmdbCache = redisCache,
+): Promise<PersonSearchResult[]> =>
+    cached(cache, `person:search:${query.trim().toLowerCase()}`, async () => {
+        const response = await fetchFromTMDB<SearchPersonResponse>(
+            `/search/person?query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`,
+        )
+        return response.results ?? []
+    })
+
+export const getPersonMovieCredits = (
+    personId: number,
+    cache: TmdbCache = redisCache,
+): Promise<PersonMovieCredits> =>
+    cached(cache, `person:${personId}:movie_credits`, () =>
+        fetchFromTMDB<PersonMovieCreditsResponse>(
+            `/person/${personId}/movie_credits?language=en-US`,
+        ),
+    )
+
 // ── Ingestion catalog endpoints (Phase 3.3) ──────────────────────────────────
 // Paginated catalog feeds the ingestion pipeline reads to discover movies to
 // embed. Backfill seeds from `/discover/movie` (popularity-ordered); the
