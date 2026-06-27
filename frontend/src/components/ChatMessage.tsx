@@ -1,4 +1,5 @@
-import { cn } from '@/lib/utils'
+import { Bubble, BubbleContent } from '@/components/ui/bubble'
+import { Message, MessageContent, MessageHeader } from '@/components/ui/message'
 import {
     isToolPart,
     MANAGE_WATCHLIST,
@@ -15,19 +16,19 @@ interface ChatMessageProps {
 }
 
 /**
- * Renders one chat turn from its parts: text, retrieval/tool activity, and — for
- * the HITL `manage_watchlist` tool — either the approve/deny prompt (while
- * awaiting confirmation) or the settled outcome.
+ * Renders one chat turn from its parts on the shadcn `Message`/`Bubble`
+ * primitives: text bubbles (user right-aligned + amber-tinted, assistant left +
+ * muted), retrieval/tool activity, and — for the HITL `manage_watchlist` tool —
+ * either the approve/deny prompt (while awaiting confirmation) or the settled
+ * outcome.
  */
 export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
     const isUser = message.role === 'user'
 
     return (
-        <div className={cn('flex max-w-[85%] flex-col gap-1', isUser && 'items-end self-end')}>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                {isUser ? 'You' : 'TheMovie'}
-            </div>
-            <div className="flex flex-col gap-2">
+        <Message align={isUser ? 'end' : 'start'}>
+            <MessageContent>
+                <MessageHeader>{isUser ? 'You' : 'TheMovie'}</MessageHeader>
                 {message.parts.map((part, index) => {
                     // Tool parts have a stable id; other parts (text, reasoning,
                     // step) have none, so key on type + index — stable for the
@@ -38,17 +39,11 @@ export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
 
                     if (part.type === 'text') {
                         return part.text ? (
-                            <p
-                                key={key}
-                                className={cn(
-                                    'm-0 whitespace-pre-wrap rounded-xl border px-3.5 py-2.5 leading-relaxed',
-                                    isUser
-                                        ? 'border-primary/25 bg-accent-soft'
-                                        : 'border-border bg-muted',
-                                )}
-                            >
-                                {part.text}
-                            </p>
+                            <Bubble key={key} variant={isUser ? 'tinted' : 'muted'}>
+                                <BubbleContent className="whitespace-pre-wrap">
+                                    {part.text}
+                                </BubbleContent>
+                            </Bubble>
                         ) : null
                     }
 
@@ -76,7 +71,7 @@ export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
 
                     return null
                 })}
-            </div>
-        </div>
+            </MessageContent>
+        </Message>
     )
 }

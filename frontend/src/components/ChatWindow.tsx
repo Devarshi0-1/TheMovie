@@ -1,9 +1,19 @@
 import { useChat } from '@ai-sdk/react'
 import { lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader } from '@/components/ui/empty'
+import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker'
+import {
+    MessageScroller,
+    MessageScrollerButton,
+    MessageScrollerContent,
+    MessageScrollerItem,
+    MessageScrollerProvider,
+    MessageScrollerViewport,
+} from '@/components/ui/message-scroller'
+import { Spinner } from '@/components/ui/spinner'
 import {
     createChatTransport,
     fetchConversationMessages,
@@ -27,6 +37,11 @@ const SUGGESTIONS = [
  * HITL watchlist confirmation: when the user approves a `manage_watchlist`
  * proposal, the change is applied via REST (in the confirm UI), the watchlist
  * caches are refreshed, and the result is fed back so the agent auto-continues.
+ *
+ * The transcript is built on the shadcn `MessageScroller`: it anchors each user
+ * turn, sticks to the live edge as replies stream (`autoScroll`), fades the top
+ * edge as a scroll hint (`scroll-fade`), and surfaces a jump-to-latest button
+ * when the user scrolls up — replacing the previous hand-rolled scroll effect.
  */
 export function ChatWindow({ conversationId }: { conversationId?: string }) {
     const { messages, sendMessage, setMessages, status, stop, regenerate, error, addToolResult } =
@@ -71,78 +86,94 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
         void addToolResult({ tool: MANAGE_WATCHLIST, toolCallId, output })
     }
 
-    // Auto-scroll to the latest turn. The first run (mount / cross-session
-    // restore) jumps instantly so it doesn't yank the viewport on initial paint;
-    // subsequent appends animate.
-    const endRef = useRef<HTMLDivElement>(null)
-    const scrolledOnce = useRef(false)
-    useEffect(() => {
-        endRef.current?.scrollIntoView({ behavior: scrolledOnce.current ? 'smooth' : 'auto' })
-        scrolledOnce.current = true
-    }, [messages])
-
     return (
         <div className="flex h-[min(70vh,640px)] flex-col overflow-hidden rounded-2xl border border-border bg-card">
-            <div
-                className="flex flex-1 flex-col gap-4 overflow-y-auto p-5"
-                // Streamed replies are appended async, so announce them politely to
-                // screen readers without moving focus (A11Y Project: live regions).
-                role="log"
-                aria-live="polite"
-                aria-label="Conversation"
-            >
-                {messages.length === 0 ? (
-                    <Empty>
-                        <EmptyHeader>
-                            <EmptyDescription>
-                                Ask in plain language — I’ll search the catalog, reason over themes,
-                                and help you manage your watchlist.
-                            </EmptyDescription>
-                        </EmptyHeader>
-                        <EmptyContent>
-                            <div className="flex flex-wrap justify-center gap-2.5">
-                                {SUGGESTIONS.map((text) => (
-                                    <Button
-                                        key={text}
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => void sendMessage({ text })}
+            <MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
+                <MessageScroller className="flex-1">
+                    <MessageScrollerViewport
+                        className="p-5"
+                        // Streamed replies are appended async, so announce them
+                        // politely to screen readers without moving focus (A11Y
+                        // Project: live regions).
+                        role="log"
+                        aria-live="polite"
+                        aria-label="Conversation"
+                    >
+                        <MessageScrollerContent>
+                            {messages.length === 0 ? (
+                                <Empty>
+                                    <EmptyHeader>
+                                        <EmptyDescription>
+                                            Ask in plain language — I’ll search the catalog, reason
+                                            over themes, and help you manage your watchlist.
+                                        </EmptyDescription>
+                                    </EmptyHeader>
+                                    <EmptyContent>
+                                        <div className="flex flex-wrap justify-center gap-2.5">
+                                            {SUGGESTIONS.map((text) => (
+                                                <Button
+                                                    key={text}
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => void sendMessage({ text })}
+                                                >
+                                                    {text}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </EmptyContent>
+                                </Empty>
+                            ) : (
+                                messages.map((message) => (
+                                    // Anchor each user turn so the viewport opens on
+                                    // the latest exchange and streamed replies stay
+                                    // pinned to the live edge.
+                                    <MessageScrollerItem
+                                        key={message.id}
+                                        messageId={message.id}
+                                        scrollAnchor={message.role === 'user'}
                                     >
-                                        {text}
-                                    </Button>
-                                ))}
-                            </div>
-                        </EmptyContent>
-                    </Empty>
-                ) : (
-                    messages.map((message) => (
-                        <ChatMessage
-                            key={message.id}
-                            message={message}
-                            onToolResult={handleToolResult}
-                        />
-                    ))
-                )}
+                                        <ChatMessage
+                                            message={message}
+                                            onToolResult={handleToolResult}
+                                        />
+                                    </MessageScrollerItem>
+                                ))
+                            )}
 
-                {error && (
-                    <Alert variant="destructive">
-                        <AlertTitle>Something went wrong while answering.</AlertTitle>
-                        <AlertDescription>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => void regenerate()}
-                            >
-                                Retry
-                            </Button>
-                        </AlertDescription>
-                    </Alert>
-                )}
+                            {/* Pre-token "Thinking…" cue: the agent has the request
+                                but hasn't streamed any part yet. */}
+                            {status === 'submitted' && (
+                                <Marker className="px-3">
+                                    <MarkerIcon>
+                                        <Spinner />
+                                    </MarkerIcon>
+                                    <MarkerContent className="shimmer">Thinking…</MarkerContent>
+                                </Marker>
+                            )}
 
-                <div ref={endRef} />
-            </div>
+                            {error && (
+                                <Alert variant="destructive">
+                                    <AlertTitle>Something went wrong while answering.</AlertTitle>
+                                    <AlertDescription>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => void regenerate()}
+                                        >
+                                            Retry
+                                        </Button>
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                        </MessageScrollerContent>
+                    </MessageScrollerViewport>
+
+                    <MessageScrollerButton />
+                </MessageScroller>
+            </MessageScrollerProvider>
 
             <ChatComposer
                 onSend={(text) => void sendMessage({ text })}

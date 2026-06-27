@@ -17,6 +17,7 @@
     "dependencies": {
         "@ai-sdk/react": "^3.0.212",
         "@fontsource-variable/geist": "^5.2.9",
+        "@shadcn/react": "^0.1.0",
         "@tailwindcss/vite": "^4.3.1",
         "@tanstack/react-form": "^1.33.0",
         "@tanstack/react-query": "^5.101.1",
