@@ -11,7 +11,7 @@ import {
 import { db } from '../db'
 import { movies } from '../db/schema'
 import type { MovieForIngest } from '../lib/tmdb'
-import type { ScoredMovieResult } from '@themovie/schemas'
+import { SemanticSearchInputSchema, type ScoredMovieResult } from '@themovie/schemas'
 
 describe('genreContains (genre filter binds a jsonb membership test, not a string scalar)', () => {
     it('binds the bare genre name and never the double-encoded array string (regression)', () => {
@@ -46,7 +46,7 @@ const fakeDeps = (over: Partial<RetrievalDeps> = {}) => {
     const calls = {
         sqlSearch: [] as unknown[],
         embedQuery: [] as string[],
-        knnSearch: [] as { vector: number[]; limit: number }[],
+        knnSearch: [] as { vector: number[]; limit: number; field: string }[],
         tmdbSearchIds: [] as string[],
         tmdbDetail: [] as number[],
         writeBack: [] as MovieForIngest[][],
@@ -61,8 +61,8 @@ const fakeDeps = (over: Partial<RetrievalDeps> = {}) => {
             calls.embedQuery.push(t)
             return [0.1, 0.2, 0.3]
         },
-        async knnSearch(vector, limit) {
-            calls.knnSearch.push({ vector, limit })
+        async knnSearch(vector, limit, field) {
+            calls.knnSearch.push({ vector, limit, field })
             return []
         },
         async tmdbSearchIds(q) {
@@ -119,30 +119,88 @@ describe('searchMoviesSql', () => {
 })
 
 // ── semanticSearchMovies ─────────────────────────────────────────────────────
+const scoredMovie = (tmdbId: number, similarity: number): ScoredMovieResult => ({
+    tmdbId,
+    title: `Movie ${tmdbId}`,
+    overview: null,
+    releaseDate: null,
+    genres: [],
+    posterPath: null,
+    similarity,
+})
+
 describe('semanticSearchMovies', () => {
-    it('embeds the query then runs kNN with that vector + limit (feature)', async () => {
-        const scored: ScoredMovieResult[] = [
-            {
-                tmdbId: 1,
-                title: 'X',
-                overview: null,
-                releaseDate: null,
-                genres: [],
-                posterPath: null,
-                similarity: 0.9,
-            },
-        ]
-        const seen: { vector: number[]; limit: number }[] = []
+    it("mode 'plot' embeds the query and runs a single plot-vector kNN (feature)", async () => {
+        const scored = [scoredMovie(1, 0.9)]
+        const seen: { vector: number[]; limit: number; field: string }[] = []
         const { deps, calls } = fakeDeps({
-            knnSearch: async (vector, limit) => {
-                seen.push({ vector, limit })
+            knnSearch: async (vector, limit, field) => {
+                seen.push({ vector, limit, field })
                 return scored
             },
         })
-        const out = await semanticSearchMovies({ query: 'hero becomes villain', limit: 6 }, deps)
+        const out = await semanticSearchMovies(
+            { query: 'hero becomes villain', limit: 6, mode: 'plot' },
+            deps,
+        )
         expect(calls.embedQuery).toEqual(['hero becomes villain'])
-        expect(seen[0]).toEqual({ vector: [0.1, 0.2, 0.3], limit: 6 })
+        expect(seen).toEqual([{ vector: [0.1, 0.2, 0.3], limit: 6, field: 'plot' }])
         expect(out).toEqual(scored)
+    })
+
+    it("mode 'reception' runs a single reception-vector kNN (feature: audience search)", async () => {
+        const { deps, calls } = fakeDeps()
+        await semanticSearchMovies(
+            { query: 'genuinely terrifying', limit: 5, mode: 'reception' },
+            deps,
+        )
+        expect(calls.knnSearch).toHaveLength(1)
+        expect(calls.knnSearch[0].field).toBe('reception')
+    })
+
+    it("mode 'both' (default) queries plot AND reception then fuses by RRF (feature)", async () => {
+        // Movie 2 ranks mid in plot but TOP in reception; movie 1 tops plot only.
+        // RRF rewards appearing in both rankings.
+        const plot = [scoredMovie(1, 0.95), scoredMovie(2, 0.6), scoredMovie(3, 0.55)]
+        const reception = [scoredMovie(2, 0.9), scoredMovie(4, 0.8), scoredMovie(1, 0.5)]
+        const seen: { limit: number; field: string }[] = []
+        const { deps } = fakeDeps({
+            knnSearch: async (_vector, limit, field) => {
+                seen.push({ limit, field })
+                return field === 'plot' ? plot : reception
+            },
+        })
+        // Built through the schema so the real default (mode → 'both') is applied.
+        const out = await semanticSearchMovies(
+            SemanticSearchInputSchema.parse({ query: 'q', limit: 3 }),
+            deps,
+        )
+
+        // Both vectors were queried with a candidate pool larger than `limit`.
+        expect(seen.map((c) => c.field).sort()).toEqual(['plot', 'reception'])
+        expect(seen[0].limit).toBeGreaterThan(3)
+
+        // Movie 2 (high in BOTH) wins; movie 1 (top of plot + present in reception)
+        // is second; result is deduped and capped at the limit.
+        expect(out).toHaveLength(3)
+        expect(out[0].tmdbId).toBe(2)
+        expect(out.map((m) => m.tmdbId)).toContain(1)
+        // No duplicates across the fused rankings.
+        expect(new Set(out.map((m) => m.tmdbId)).size).toBe(out.length)
+        // Reported similarity is the best cosine the movie achieved (movie 1: 0.95).
+        expect(out.find((m) => m.tmdbId === 1)?.similarity).toBe(0.95)
+    })
+
+    it("mode 'both' tolerates an empty reception ranking (edge: no summaries embedded yet)", async () => {
+        const plot = [scoredMovie(1, 0.9), scoredMovie(2, 0.8)]
+        const { deps } = fakeDeps({
+            knnSearch: async (_v, _l, field) => (field === 'plot' ? plot : []),
+        })
+        const out = await semanticSearchMovies(
+            SemanticSearchInputSchema.parse({ query: 'q', limit: 5 }),
+            deps,
+        )
+        expect(out.map((m) => m.tmdbId)).toEqual([1, 2]) // degrades to plot-only ranking
     })
 })
 

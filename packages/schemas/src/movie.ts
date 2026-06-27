@@ -45,6 +45,18 @@ export const SqlSearchInputSchema = z.object({
 })
 export type SqlSearchInput = z.infer<typeof SqlSearchInputSchema>
 
+// Which embedding(s) the semantic search ranks against. 'plot' searches the
+// title/overview/genre vector (what a film is about); 'reception' searches the
+// audience-review-summary vector (how audiences received it — "genuinely scary",
+// "divisive ending"); 'both' fuses the two rankings (the safe default).
+export const SemanticSearchModeSchema = z
+    .enum(['plot', 'reception', 'both'])
+    .default('both')
+    .describe(
+        "Which signal to rank against: 'plot' (what the film is about), 'reception' (how audiences received it — emotional impact, praise/criticism), or 'both' (fuse them). Prefer 'reception' or 'both' for queries about audience experience.",
+    )
+export type SemanticSearchMode = z.infer<typeof SemanticSearchModeSchema>
+
 export const SemanticSearchInputSchema = z.object({
     query: z
         .string()
@@ -53,6 +65,7 @@ export const SemanticSearchInputSchema = z.object({
             'A conceptual or thematic description of the movie, e.g. "hero later becomes the villain", "slow-burn dread like Hereditary".',
         ),
     limit: z.number().int().min(1).max(20).default(8).describe('Max results to return.'),
+    mode: SemanticSearchModeSchema,
 })
 export type SemanticSearchInput = z.infer<typeof SemanticSearchInputSchema>
 

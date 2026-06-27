@@ -62,6 +62,14 @@ describe('tool input schemas', () => {
         expect(() => SemanticSearchInputSchema.parse({ query: '' })).toThrow()
     })
 
+    it('SemanticSearch mode defaults to "both" and rejects unknown modes (feature: reception search)', () => {
+        expect(SemanticSearchInputSchema.parse({ query: 'scary' }).mode).toBe('both')
+        expect(SemanticSearchInputSchema.parse({ query: 'scary', mode: 'reception' }).mode).toBe(
+            'reception',
+        )
+        expect(() => SemanticSearchInputSchema.parse({ query: 'scary', mode: 'vibes' })).toThrow()
+    })
+
     it('FetchFromTmdb defaults limit to 3 (feature)', () => {
         expect(FetchFromTmdbInputSchema.parse({ query: 'dune' }).limit).toBe(3)
     })

@@ -32,11 +32,14 @@ const searchMoviesSqlTool = tool({
 
 const semanticSearchMoviesTool = tool({
     description:
-        'TIER 2 — semantic similarity search over embedded movie plots/themes (pgvector). Use this for ' +
+        'TIER 2 — semantic similarity search over embedded movies (pgvector). Use this for ' +
         'conceptual or thematic queries that keywords cannot capture, e.g. "a movie where the hero later ' +
         'becomes the villain" or "slow-burn dread like Hereditary". Prefer search_movies_sql first for exact ' +
-        'queries. If this returns nothing relevant (the title may be missing from the catalog), escalate to ' +
-        'fetch_from_tmdb.',
+        'queries. Set `mode` to match the query: "plot" for what a film is ABOUT (story, theme, premise); ' +
+        '"reception" for how AUDIENCES experienced it (emotional impact, what people praise or criticize — ' +
+        '"a movie audiences found genuinely terrifying", "a divisive ending people argue about"); "both" ' +
+        '(the default) when unsure or when the query mixes the two. If this returns nothing relevant (the ' +
+        'title may be missing from the catalog), escalate to fetch_from_tmdb.',
     inputSchema: SemanticSearchInputSchema,
     execute: (input) => semanticSearchMovies(input),
 })
