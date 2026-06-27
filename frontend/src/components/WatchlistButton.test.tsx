@@ -6,9 +6,17 @@ import { makeTestQueryClient, renderWithProviders } from '../test/providers'
 import { WatchlistButton } from './WatchlistButton'
 
 // Toasts fire from a portal we don't mount here; assert on the call instead.
+// `toast` is callable (neutral toast for undoable removal) AND has .success/.error.
 vi.mock('sonner', () => ({
-    toast: { success: vi.fn(), error: vi.fn() },
+    toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
+
+/** The options object of the most recent neutral `toast(msg, opts)` call. */
+function lastActionToast() {
+    const calls = vi.mocked(toast).mock.calls
+    const call = [...calls].reverse().find((c) => c[1] && 'action' in c[1])
+    return call?.[1] as { action?: { label: string; onClick: () => void } } | undefined
+}
 
 function jsonResponse(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), {
@@ -91,6 +99,36 @@ describe('<WatchlistButton />', () => {
 
         const btn = await screen.findByRole('button', { name: '✓ On your watchlist' })
         expect(btn).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    // ── Feature: removal is reversible via an Undo toast ──────────────────
+    it('offers Undo after removing, and re-adds when Undo is clicked', async () => {
+        const spy = mockApi(true)
+        renderWithProviders(<WatchlistButton {...PROPS} />, signedInClient())
+
+        fireEvent.click(await screen.findByRole('button', { name: '✓ On your watchlist' }))
+
+        await waitFor(() =>
+            expect(
+                spy.mock.calls.some(
+                    ([url, init]) => url.includes('/watchlist') && init?.method === 'DELETE',
+                ),
+            ).toBe(true),
+        )
+
+        // A neutral toast carrying an Undo action (not toast.success).
+        await waitFor(() => expect(lastActionToast()?.action?.label).toBe('Undo'))
+        expect(toast.success).not.toHaveBeenCalled()
+
+        // Clicking Undo re-adds the movie (POST).
+        lastActionToast()!.action!.onClick()
+        await waitFor(() =>
+            expect(
+                spy.mock.calls.some(
+                    ([url, init]) => url.includes('/watchlist') && init?.method === 'POST',
+                ),
+            ).toBe(true),
+        )
     })
 
     // ── Edge case: signed out ─────────────────────────────────────────────

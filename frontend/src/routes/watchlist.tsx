@@ -1,4 +1,4 @@
-import type { MovieResult } from '@themovie/schemas'
+import type { MovieResult, WatchlistEntry } from '@themovie/schemas'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
@@ -8,7 +8,7 @@ import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty'
 import { MovieCardLink } from '../components/MovieCardLink'
 import { POSTER_GRID_CLASS, PosterGridSkeleton } from '../components/PosterGridSkeleton'
 import { requireSession } from '../lib/auth'
-import { useRemoveFromWatchlist, watchlistQueryOptions } from '../lib/watchlist'
+import { useAddToWatchlist, useRemoveFromWatchlist, watchlistQueryOptions } from '../lib/watchlist'
 
 export const Route = createFileRoute('/watchlist')({
     // Auth-gated; guard before render so signed-out users never see the shell.
@@ -19,6 +19,31 @@ export const Route = createFileRoute('/watchlist')({
 function WatchlistScreen() {
     const { data, isPending, isError } = useQuery(watchlistQueryOptions)
     const remove = useRemoveFromWatchlist()
+    const add = useAddToWatchlist()
+
+    // Removal is reversible: a neutral toast offers Undo (NN/g "user control &
+    // freedom"), which re-adds the entry via the same add mutation.
+    function removeWithUndo(entry: WatchlistEntry) {
+        remove.mutate(entry.movieId, {
+            onSuccess: () =>
+                toast(`Removed “${entry.title}” from your watchlist`, {
+                    duration: 6000,
+                    action: {
+                        label: 'Undo',
+                        onClick: () =>
+                            add.mutate(
+                                {
+                                    movieId: entry.movieId,
+                                    title: entry.title,
+                                    posterPath: entry.posterPath,
+                                },
+                                { onError: () => toast.error('Couldn’t undo. Try again.') },
+                            ),
+                    },
+                }),
+            onError: () => toast.error(`Couldn’t remove “${entry.title}”. Try again.`),
+        })
+    }
 
     return (
         <main className="mx-auto w-full max-w-[1100px] px-6 py-10">
@@ -63,18 +88,7 @@ function WatchlistScreen() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() =>
-                                        remove.mutate(entry.movieId, {
-                                            onSuccess: () =>
-                                                toast.success(
-                                                    `Removed “${entry.title}” from your watchlist`,
-                                                ),
-                                            onError: () =>
-                                                toast.error(
-                                                    `Couldn’t remove “${entry.title}”. Try again.`,
-                                                ),
-                                        })
-                                    }
+                                    onClick={() => removeWithUndo(entry)}
                                     disabled={remove.isPending}
                                 >
                                     Remove

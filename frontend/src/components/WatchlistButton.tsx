@@ -57,7 +57,20 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
         // instead of firing one toast per movie.
         if (inList) {
             remove.mutate(movieId, {
-                onSuccess: () => toast.success(`Removed “${title}” from your watchlist`),
+                // Removal is reversible: a neutral toast offers Undo (NN/g "user
+                // control & freedom") which re-adds via the same add mutation.
+                onSuccess: () =>
+                    toast(`Removed “${title}” from your watchlist`, {
+                        duration: 6000,
+                        action: {
+                            label: 'Undo',
+                            onClick: () =>
+                                add.mutate(
+                                    { movieId, title, posterPath },
+                                    { onError: () => toast.error('Couldn’t undo. Try again.') },
+                                ),
+                        },
+                    }),
                 onError: () => toast.error(`Couldn’t remove “${title}”. Try again.`),
             })
         } else {
