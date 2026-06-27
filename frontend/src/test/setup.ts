@@ -8,6 +8,22 @@ import { afterEach } from 'vitest'
 // the chat window scrolling to the latest message) don't throw on mount.
 Element.prototype.scrollIntoView = () => {}
 
+// jsdom doesn't implement matchMedia; stub it (always non-matching) so responsive
+// hooks like the sidebar's `useIsMobile` don't throw when components mount.
+if (!window.matchMedia) {
+    window.matchMedia = (query: string): MediaQueryList =>
+        ({
+            matches: false,
+            media: query,
+            onchange: null,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+            addListener: () => {},
+            removeListener: () => {},
+            dispatchEvent: () => false,
+        }) as unknown as MediaQueryList
+}
+
 afterEach(() => {
     cleanup()
 })
