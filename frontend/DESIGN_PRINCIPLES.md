@@ -79,6 +79,17 @@ When you add or modify a screen or component, it must handle **every applicable 
 - Surface shortcuts and options instead of hiding them in code. The chat composer shows "Press Enter to send, Shift+Enter for a new line" tied to the textarea via `aria-describedby` (NN/g #6/#7, Jakob's Law).
 - _Canonical:_ `src/components/ChatComposer.tsx`.
 
+### 10. Visual craft (Refactoring UI)
+Polish comes from **constrained, intentional scales**, not ad-hoc values. Our shadcn tokens (`src/styles/app.css`) already encode most of this — stay inside them rather than inventing sizes, colors, or shadows.
+
+- **Hierarchy by weight & color, then size.** Establish emphasis with `font-medium`/`font-semibold` + `text-foreground` vs `text-muted-foreground` *before* reaching for a bigger size. Secondary/meta text → `text-sm text-muted-foreground`. Labels are a last resort — let visual hierarchy do the talking. _(See `MovieCard`, the `movie.$id` meta row.)_
+- **Constrained type scale.** Use Tailwind's steps (`text-xs` … `text-6xl`) — don't invent sizes. The font is **Geist** (`--font-sans` / `--font-heading`). Only prominent headings scale across breakpoints (rule 8); body stays `text-base` / `text-sm`. Let line-height ride the Tailwind defaults (tighter for large headings, e.g. `leading-tight`/`leading-[1.05]`; relaxed for prose, `leading-relaxed`).
+- **Line length (measure).** Cap prose at ~45–75 characters: `max-w-[60ch]` (overview), `max-w-[56ch]` (hero subcopy), `max-w-[18ch]` (hero headline). Page content is bounded by `max-w-[1100px]`. Never let paragraphs run the full width.
+- **Spacing scale & breathing room.** Space with the Tailwind scale via `gap-*` / `p-*` (never `space-x/y-*`). Start generous, then tighten. Convey grouping with proximity — smaller gaps within a group, larger between groups — not borders.
+- **Color: semantic shades, never hue alone.** Use the token palette (`bg-card`, `text-muted-foreground`, `text-primary`, `text-pro`/`text-con`, `bg-accent-soft`); the brand is the cinematic amber `--primary`. **Never put low-contrast grey text on a colored surface** — on `bg-primary` use `text-primary-foreground`, on `bg-accent-soft` use full-contrast text. Always pair a status color with an icon/label/shape (the review pros/cons have "Loved"/"Critiqued" headings, not just green/orange). Don't hardcode hex or raw Tailwind colors (`bg-blue-500`) — extend tokens in `app.css` if a new shade is truly needed.
+- **Depth & radius.** Elevation comes from the shadcn shadow scale + `border-border` with a consistent top light source — don't hand-roll shadows or `dark:` color overrides. Use the radius tokens consistently (`rounded-md`/`rounded-xl`/`rounded-2xl`, all derived from `--radius`); cards are `rounded-xl`/`rounded-2xl`.
+- **Real content & intended image size.** Design against real TMDB data — long titles, missing posters (→ 🎬 fallback), empty review sets — not lorem ipsum. Serve images at their intended size (poster `w342`, backdrop `original`) with intrinsic dimensions (rule 7); never upscale a small image.
+
 ---
 
 ## shadcn alignment (summary — full rules in the shadcn skill)
@@ -109,4 +120,5 @@ For any new screen or data-driven/interactive component, confirm:
 - [ ] **Images:** `alt`, `loading="lazy"`, intrinsic dimensions/aspect ratio, fallback.
 - [ ] **Responsive:** mobile-first; headings scale on larger breakpoints.
 - [ ] Built on shadcn primitives + semantic tokens; `className` for layout only.
+- [ ] **Visual craft:** constrained type/spacing scale, prose capped at a readable measure (`max-w-[…ch]`), hierarchy via weight/color, status conveyed by more than hue (rule 10).
 - [ ] Feature + edge tests added; `bun run test`, `lint`, `typecheck` green; touched files formatted.
