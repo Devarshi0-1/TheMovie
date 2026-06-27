@@ -135,6 +135,24 @@ const defaultChatDeps: ChatDeps = {
 }
 
 /**
+ * The conversation id to use for this turn: the client's requested id when it's
+ * new or already theirs, otherwise a freshly generated one. A request carrying
+ * SOMEONE ELSE'S id therefore starts a new thread for the requester instead of
+ * erroring (the ownership guard in `store.save` would otherwise throw a 500) —
+ * and it never reads or writes that other user's conversation.
+ */
+export async function resolveConversationId(
+    store: ConversationStore,
+    userId: string,
+    requested: string | undefined,
+    generateId: () => string,
+): Promise<string> {
+    if (!requested) return generateId()
+    const owner = await store.ownerOf(requested)
+    return owner === null || owner === userId ? requested : generateId()
+}
+
+/**
  * The chat pipeline as plain control flow with multi-turn memory: load prior
  * turns → intent gate (cheap guardrail) → agent loop over the full
  * conversation → persist the new turn via the stream's onFinish. Blocked/empty
@@ -183,7 +201,12 @@ export async function handleChat(
         return refusalResponse('Tell me what you feel like watching and I’ll find something.')
     }
 
-    const conversationId = ctx.conversationId ?? deps.generateId()
+    const conversationId = await resolveConversationId(
+        deps.store,
+        ctx.userId,
+        ctx.conversationId,
+        deps.generateId,
+    )
     const history = (await deps.store.load(ctx.userId, conversationId)) ?? []
 
     const decision = await deps.gate(query)

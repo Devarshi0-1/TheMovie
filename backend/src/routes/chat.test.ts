@@ -3,6 +3,7 @@ import type { UIMessage } from 'ai'
 import {
     handleChat,
     loadConversationMessages,
+    resolveConversationId,
     splitIntoStreamChunks,
     type ChatContext,
     type ChatDeps,
@@ -36,7 +37,7 @@ const intentResult = (over: Partial<IntentResult> = {}): IntentResult => ({
 })
 
 // Fake store records loads/saves; seed history via `history`.
-const fakeStore = (history: UIMessage[] | null = []) => {
+const fakeStore = (history: UIMessage[] | null = [], owner: string | null = null) => {
     const saved: { conversationId: string; messages: UIMessage[] }[] = []
     const loads: string[] = []
     const store: ConversationStore = {
@@ -46,6 +47,9 @@ const fakeStore = (history: UIMessage[] | null = []) => {
         },
         async save(_userId, conversationId, messages) {
             saved.push({ conversationId, messages })
+        },
+        async ownerOf() {
+            return owner
         },
     }
     return { store, saved, loads }
@@ -79,14 +83,14 @@ const fakeAgent = () => {
 
 const makeDeps = (
     decision: GateDecision,
-    opts: { history?: UIMessage[] | null } = {},
+    opts: { history?: UIMessage[] | null; owner?: string | null } = {},
 ): {
     deps: ChatDeps
     store: ReturnType<typeof fakeStore>
     agent: ReturnType<typeof fakeAgent>
     gateCalls: number[]
 } => {
-    const store = fakeStore(opts.history ?? [])
+    const store = fakeStore(opts.history ?? [], opts.owner ?? null)
     const agent = fakeAgent()
     let idSeq = 0
     const gateCalls: number[] = []
@@ -346,5 +350,41 @@ describe('splitIntoStreamChunks — token-by-token refusal', () => {
 
     it('returns [] for empty text (edge)', () => {
         expect(splitIntoStreamChunks('')).toEqual([])
+    })
+})
+
+describe('resolveConversationId — cross-user safety', () => {
+    const gen = () => 'fresh-id'
+
+    it('keeps a new (unowned) id and the user’s own id (feature)', async () => {
+        const free = fakeStore(null, null).store // ownerOf -> null (doesn't exist yet)
+        expect(await resolveConversationId(free, 'user-1', 'conv-1', gen)).toBe('conv-1')
+
+        const mine = fakeStore(null, 'user-1').store // ownerOf -> the same user
+        expect(await resolveConversationId(mine, 'user-1', 'conv-1', gen)).toBe('conv-1')
+    })
+
+    it('generates a fresh id when none is requested (feature)', async () => {
+        const free = fakeStore(null, null).store
+        expect(await resolveConversationId(free, 'user-1', undefined, gen)).toBe('fresh-id')
+    })
+
+    it('replaces a foreign-owned id with a fresh one (edge: no cross-user write)', async () => {
+        const foreign = fakeStore(null, 'someone-else').store // ownerOf -> a different user
+        expect(await resolveConversationId(foreign, 'user-1', 'their-conv', gen)).toBe('fresh-id')
+    })
+})
+
+describe('handleChat — foreign conversation id', () => {
+    it('starts a fresh thread instead of writing to another user’s conversation (edge)', async () => {
+        const { deps, store } = makeDeps(
+            { allowed: true, result: intentResult() },
+            { owner: 'someone-else' },
+        )
+        const res = await handleChat(ctx({ conversationId: 'their-conv' }), deps)
+        // The client is handed a new id, and nothing is saved under the foreign one.
+        expect(res.headers.get('X-Conversation-Id')).not.toBe('their-conv')
+        expect(store.saved.every((s) => s.conversationId !== 'their-conv')).toBe(true)
+        expect(store.saved[0]?.conversationId).toBe('gen-0')
     })
 })
