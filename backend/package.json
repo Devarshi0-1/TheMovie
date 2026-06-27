@@ -3,7 +3,7 @@
     "scripts": {
         "dev": "concurrently \"bun run redis-start\" \"bun run drizzle-studio\" \"bun run --hot src/index.ts\"",
         "drizzle-studio": "bunx drizzle-kit studio",
-        "db:migrate": "bunx drizzle-kit migrate",
+        "db:migrate": "bun run src/db/migrate.ts",
         "db:generate": "bunx drizzle-kit generate",
         "ingest": "bun run src/jobs/ingest.ts",
         "redis-start": "docker start my-movie-redis",

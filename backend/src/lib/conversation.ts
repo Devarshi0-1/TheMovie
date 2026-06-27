@@ -12,6 +12,8 @@ export interface ConversationStore {
     load(userId: string, conversationId: string): Promise<UIMessage[] | null>
     /** Append messages, creating the conversation (owned by userId) if new. */
     save(userId: string, conversationId: string, messages: UIMessage[]): Promise<void>
+    /** The userId that owns a conversation, or null if it doesn't exist yet. */
+    ownerOf(conversationId: string): Promise<string | null>
 }
 
 interface ChatMessageRow {
@@ -86,5 +88,14 @@ export const conversationStore: ConversationStore = {
             .update(conversation)
             .set({ updatedAt: new Date() })
             .where(eq(conversation.id, conversationId))
+    },
+
+    async ownerOf(conversationId) {
+        const [row] = await db
+            .select({ userId: conversation.userId })
+            .from(conversation)
+            .where(eq(conversation.id, conversationId))
+            .limit(1)
+        return row?.userId ?? null
     },
 }

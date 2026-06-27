@@ -50,6 +50,18 @@ describe('CI workflow', () => {
     })
 })
 
+describe('DB migration runner', () => {
+    const pkg = readFileSync(join(backendDir, 'package.json'), 'utf8')
+
+    // drizzle-kit migrate can't run on this Bun-native stack (it needs a node
+    // pg/postgres driver we don't install); db:migrate must use the bun-sql
+    // migrator script instead. Guards against a regression back to drizzle-kit.
+    it('uses the Bun-native migrator, not drizzle-kit migrate (regression)', () => {
+        expect(pkg).toContain('"db:migrate": "bun run src/db/migrate.ts"')
+        expect(pkg).not.toContain('drizzle-kit migrate')
+    })
+})
+
 describe('AI model configuration', () => {
     // Drift guard (CLAUDE.md → "Right-size the model"): the project runs
     // `gpt-5-nano` across every LLM call as a deliberate cost choice, and the docs
