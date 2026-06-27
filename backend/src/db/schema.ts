@@ -10,6 +10,11 @@ import {
     vector,
 } from 'drizzle-orm/pg-core'
 
+// All timestamps are `timestamptz` (BDB-5): a `timestamp without time zone`
+// round-tripped through JS `Date`s drifts if the DB/server TZ isn't UTC. Storing
+// the offset removes that footgun. BetterAuth is agnostic to the column's tz.
+const tstz = (name: string) => timestamp(name, { withTimezone: true })
+
 // Native jsonb that stores the JS value as real jsonb (array/object) instead of
 // a JSON-stringified scalar. drizzle-orm's stock `jsonb()` pre-`JSON.stringify`s
 // the value and Bun's SQL driver serializes it again, double-encoding the column:
@@ -46,8 +51,8 @@ export const user = pgTable('user', {
     email: text('email').notNull().unique(),
     emailVerified: boolean('email_verified').notNull(),
     image: text('image'),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+    createdAt: tstz('created_at').notNull().defaultNow(),
+    updatedAt: tstz('updated_at')
         .notNull()
         .defaultNow()
         .$onUpdate(() => new Date()),
@@ -57,15 +62,15 @@ export const session = pgTable(
     'session',
     {
         id: text('id').primaryKey(),
-        expiresAt: timestamp('expires_at').notNull(),
+        expiresAt: tstz('expires_at').notNull(),
         token: text('token').notNull(),
         userId: text('user_id')
             .notNull()
             .references(() => user.id, { onDelete: 'cascade' }),
         ipAddress: text('ip_address'),
         userAgent: text('user_agent'),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
-        updatedAt: timestamp('updated_at')
+        createdAt: tstz('created_at').notNull().defaultNow(),
+        updatedAt: tstz('updated_at')
             .notNull()
             .defaultNow()
             .$onUpdate(() => new Date()),
@@ -92,12 +97,12 @@ export const account = pgTable(
         accessToken: text('access_token'),
         refreshToken: text('refresh_token'),
         idToken: text('id_token'),
-        accessTokenExpiresAt: timestamp('access_token_expires_at'),
-        refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+        accessTokenExpiresAt: tstz('access_token_expires_at'),
+        refreshTokenExpiresAt: tstz('refresh_token_expires_at'),
         scope: text('scope'),
         password: text('password'),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
-        updatedAt: timestamp('updated_at')
+        createdAt: tstz('created_at').notNull().defaultNow(),
+        updatedAt: tstz('updated_at')
             .notNull()
             .defaultNow()
             .$onUpdate(() => new Date()),
@@ -113,9 +118,9 @@ export const verification = pgTable('verification', {
     id: text('id').primaryKey(),
     identifier: text('identifier').notNull(),
     value: text('value').notNull(),
-    expiresAt: timestamp('expires_at').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
+    expiresAt: tstz('expires_at').notNull(),
+    createdAt: tstz('created_at').notNull().defaultNow(),
+    updatedAt: tstz('updated_at')
         .notNull()
         .defaultNow()
         .$onUpdate(() => new Date()),
@@ -133,8 +138,8 @@ export const watchlist = pgTable(
         movieId: integer('movie_id').notNull(),
         title: text('title').notNull(),
         posterPath: text('poster_path'),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
-        updatedAt: timestamp('updated_at')
+        createdAt: tstz('created_at').notNull().defaultNow(),
+        updatedAt: tstz('updated_at')
             .notNull()
             .defaultNow()
             .$onUpdate(() => new Date()),
@@ -182,9 +187,9 @@ export const movies = pgTable(
         // actually change?" trigger (unchanged count → skip regeneration).
         reviewCountAtSummary: integer('review_count_at_summary'),
         // When the summary was last (re)generated — the tiered-refresh clock.
-        reviewSummaryAt: timestamp('review_summary_at'),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
-        updatedAt: timestamp('updated_at')
+        reviewSummaryAt: tstz('review_summary_at'),
+        createdAt: tstz('created_at').notNull().defaultNow(),
+        updatedAt: tstz('updated_at')
             .notNull()
             .defaultNow()
             .$onUpdate(() => new Date()),
@@ -223,8 +228,8 @@ export const conversation = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: 'cascade' }),
         title: text('title'),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
-        updatedAt: timestamp('updated_at')
+        createdAt: tstz('created_at').notNull().defaultNow(),
+        updatedAt: tstz('updated_at')
             .notNull()
             .defaultNow()
             .$onUpdate(() => new Date()),
@@ -243,7 +248,7 @@ export const chatMessage = pgTable(
             .references(() => conversation.id, { onDelete: 'cascade' }),
         role: text('role').notNull(),
         parts: jsonbNative<unknown>('parts').notNull(),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
+        createdAt: tstz('created_at').notNull().defaultNow(),
     },
     (t) => [index('chat_message_conversation_idx').on(t.conversationId)],
 )
@@ -263,8 +268,8 @@ export const review = pgTable(
         movieId: integer('movie_id').notNull(),
         rating: integer('rating'),
         content: text('content').notNull(),
-        createdAt: timestamp('created_at').notNull().defaultNow(),
-        updatedAt: timestamp('updated_at')
+        createdAt: tstz('created_at').notNull().defaultNow(),
+        updatedAt: tstz('updated_at')
             .notNull()
             .defaultNow()
             .$onUpdate(() => new Date()),

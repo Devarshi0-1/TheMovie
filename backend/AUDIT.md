@@ -8,18 +8,16 @@
 
 > Companion artifact: `frontend/AUDIT.md`. Shared decisions D1–D3 (below) span both packages.
 
-> **Status (PR `fix/backend-audit-findings`):** the bulk is **done** — all 🔴 except BTEST-2, and the security/DB/routing/tooling MEDIUMs.
+> **Status (PR `fix/backend-audit-findings`):** all 🔴 and the security/DB/routing/tooling MEDIUMs are **done** — migrations applied + verified against the live pgvector DB.
 > - **Tooling:** dropped `pg`/`@types/pg`/`dotenv` (BST-1/2); backend + `@themovie/schemas` on **tsgo** (D1/BST-4); both extend `tsconfig.base.json` with `noUncheckedIndexedAccess` (D3/BST-5, ~54 sites fixed); **oxlint** type-aware + **Prettier** with lint/format scripts (BST-6).
-> - **DB (migration 0008):** `session.token` unique (BDB-1), FK indexes (BDB-2), `review_summary_at` index (BDB-3).
+> - **DB (migrations 0008 + 0009, applied + verified):** `session.token` unique (BDB-1), FK indexes (BDB-2), `review_summary_at` index (BDB-3); all timestamp columns → `timestamptz` (BDB-5).
 > - **Security:** Bun.password/Argon2 (BSEC-1/BST-3), opt-in cross-site cookies (BSEC-2, closes AU-2), shared+dev-gated origins (BSEC-6), XFF rightmost-hop (BSEC-3), fail-closed auth limiter (BSEC-4), uniform jobs 401 (BSEC-7), env assertions (BSEC-8/BERR-4).
 > - **Routing/errors:** `app.onError`/`notFound` (BRT-1/BRT-4/BERR-1), shared `requireAuth` (BRT-2), shared `MovieIdSchema` (BRT-3/BRT-6), dead `Variables` dropped (BRT-5), conversationId guard (BRT-7), stream `onError` (BAG-2/BERR-2), safe `onFinish` persist (BERR-3).
-> - **DB correctness:** `conversation.save()` transaction (BDB-4).
-> - **Tests:** agent-loop wiring via a mock model (BTEST-1).
+> - **DB correctness:** `conversation.save()` transaction (BDB-4) — **verified atomic** (the integration test's foreign-write case proves rollback).
+> - **Tests:** agent-loop wiring via a mock model (BTEST-1); **BTEST-2** — a `RUN_DB_INTEGRATION`-gated integration test for the REAL `ConversationStore` (cross-user guard, transactional rollback, ordered load, HITL parts-heal) against the live DB, run via `bun run test:integration`; the default `bun test` stays offline (skips it).
 >
 > **Deferred, with reasons:**
-> - **BTEST-2** (real `ConversationStore`): needs a live DB; belongs in an integration suite, not the offline DI-fake unit suite (mocking the Drizzle chain would test the mock, not the SQL). The cross-user guard is exercised via the fake store in `chat.test.ts`.
 > - **DL-10** (movie endpoints return `MovieResult`): coordinated backend+frontend contract change (the frontend mapper + its tests must go too) — risky to bundle here; its own follow-up.
-> - **BDB-5** (timestamptz): invasive every-column type migration, low real risk on UTC deploys, unverifiable without a live DB.
 > - **BAG-1** (intent-gate context): genuine UX improvement but needs a careful gate-prompt change + new tests — deferred to keep this PR bounded.
 > - Minor NITs (BAG-3/5, BJOB-1/2, BDB-6/7/8): low-value, left as noted.
 

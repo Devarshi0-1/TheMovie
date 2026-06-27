@@ -10,6 +10,7 @@
         "redis-start": "docker start my-movie-redis",
         "redis-stop": "docker stop my-movie-redis",
         "test": "bun test",
+        "test:integration": "RUN_DB_INTEGRATION=1 bun test src/lib/conversation.integration.test.ts",
         "lint": "oxlint --type-aware src",
         "format": "prettier --write src",
         "format:check": "prettier --check src",
