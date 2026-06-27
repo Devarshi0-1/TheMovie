@@ -13,7 +13,7 @@
 > **Two items remain, with reasons:**
 >
 > - ~~**DL-10** (TMDB mapper dedup)~~ — **done** in PR `feat/movie-endpoints-movieresult`: the backend movie endpoints now return the shared camelCase `MovieResult` / `MovieDetailView` (mapping moved to `backend/lib/movieView`), and the frontend mapper in `lib/tmdb.ts` was deleted — `lib/movies.ts` just validates against the shared schemas now. `lib/tmdb.ts` keeps only the image-CDN bases + `formatRuntime`.
-> - **LT-6** (React Compiler) — attempted, but on Vite 8 + `@vitejs/plugin-react` v6 it needs the rolldown `reactCompilerPreset` via `@rolldown/plugin-babel` (0.1.x). That's a bleeding-edge integration deserving its own change with build + SSR verification, not a NIT bundle. Deferred.
+> - ~~**LT-6** (React Compiler)~~ — **done** in PR `feat/react-compiler`: wired via `@vitejs/plugin-react` v6's exported `reactCompilerPreset` run as a `@rolldown/plugin-babel` pass (`babel-plugin-react-compiler` 1.0.0), targeting React 19's built-in `react/compiler-runtime`. Verified the compiler emits memoization (`useMemoCache`/`_c(`) in the client bundle; build + 115 tests green; SSR smoke-tested (no hydration errors).
 >
 > Tooling note: D1/tsgo for `@themovie/schemas` is deferred to the backend PR (still `tsc`); the shared `tsconfig.base.json` (D3) is created here and adopted by the backend there.
 
@@ -192,7 +192,7 @@ Current `.oxlintrc.json`: plugins `[react, typescript, jsx-a11y, import]`; `corr
 ### React 19
 
 - ✅ Automatic JSX runtime + `react/react-in-jsx-scope: off` correct.
-- 🟢 LT-6 — **Not using the React Compiler** (no `babel-plugin-react-compiler` / `react-compiler` lint rule). Optional but the key React 19 lever; would remove manual memoization and flag rules-of-React violations.
+- ✅ LT-6 — **React Compiler enabled** (`babel-plugin-react-compiler` 1.0.0 via the rolldown Babel pass). Auto-memoizes components/hooks and validates rules-of-React at build (bails safely on anything it can't prove). No oxlint `react-compiler` rule exists yet, so build-time validation is the safety net.
 
 **Sources:** [oxlint type-aware](https://oxc.rs/docs/guide/usage/linter/type-aware) · [VoidZero type-aware announcement](https://voidzero.dev/posts/announcing-oxlint-type-aware-linting) · [tsgolint](https://github.com/oxc-project/tsgolint) · [oxlint rules/categories](https://oxc.rs/docs/guide/usage/linter/rules).
 
@@ -272,7 +272,7 @@ Current `.oxlintrc.json`: plugins `[react, typescript, jsx-a11y, import]`; `corr
 - [ ] XC-3 — discriminated auth handler (drop `as`).
 - [ ] XC-5/6/7 — test gaps (useChat integration, busy state, restore failure).
 - [ ] TS-3 — fix drifted loader comment.
-- [ ] LT-6 — evaluate React Compiler.
+- [x] LT-6 — React Compiler enabled (rolldown Babel pass; React 19 runtime).
 
 ---
 
