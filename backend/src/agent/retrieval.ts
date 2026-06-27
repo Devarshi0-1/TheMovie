@@ -32,6 +32,15 @@ function asStringArray(value: unknown): string[] {
     return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
 }
 
+// Escape LIKE/ILIKE metacharacters so a user-supplied title is matched as a
+// literal substring. Without this, a `%` or `_` in the query acts as a wildcard
+// (e.g. "50% off" would match far more than intended). The value is still
+// parameter-bound by Drizzle — this is a search-semantics fix, not injection.
+// Backslash is Postgres LIKE's default escape char, so escape it first.
+export function escapeLike(value: string): string {
+    return value.replace(/[\\%_]/g, (ch) => `\\${ch}`)
+}
+
 /**
  * SQL predicate: the stored `genres` jsonb array contains `genre` as an element.
  *
@@ -137,7 +146,8 @@ function defaultDeps(): RetrievalDeps {
     return {
         async sqlSearch(filters) {
             const conditions = []
-            if (filters.title) conditions.push(ilike(movies.title, `%${filters.title}%`))
+            if (filters.title)
+                conditions.push(ilike(movies.title, `%${escapeLike(filters.title)}%`))
             if (filters.year) conditions.push(like(movies.releaseDate, `${filters.year}%`))
             if (filters.genre) conditions.push(genreContains(filters.genre))
 
@@ -158,7 +168,8 @@ function defaultDeps(): RetrievalDeps {
             // the HNSW index isn't asked to rank missing values.
             const column = field === 'reception' ? movies.reviewSummaryEmbedding : movies.embedding
             // Cosine distance over the HNSW index; ascending distance = closest
-            // first. similarity = 1 - distance, in [0, 1].
+            // first. similarity = 1 - distance, in [-1, 1] in general (≈[0, 1]
+            // for these normalized text-embedding-3-small vectors).
             const distance = cosineDistance(column, vector)
             const rows = await db
                 .select({ ...MOVIE_COLUMNS, similarity: sql<number>`1 - (${distance})` })

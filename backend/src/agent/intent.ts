@@ -12,8 +12,10 @@ import {
 // boundary and a cost control, so it must never enter the multi-step agent loop.
 export const INTENT_MODEL = 'gpt-5-nano'
 
-// Stable system prompt kept first (and the per-request query last, in `prompt`)
-// so OpenAI's automatic prompt caching applies to the bulk of each call.
+// Stable system prompt kept first (and the per-request query last, in `prompt`).
+// This is the correct ordering for OpenAI's automatic prompt caching, but note
+// this prompt is well under the ~1024-token cache floor, so in practice caching
+// rarely engages here — the ordering is cheap insurance, not a live saving.
 const SYSTEM_PROMPT = `You are the intent gate for a movie discovery assistant. Classify the user's latest message into exactly one intent, and judge its relevance and safety.
 
 Definitions:
@@ -33,7 +35,7 @@ export interface TokenUsage {
     inputTokens?: number
     outputTokens?: number
     totalTokens?: number
-    /** Cached prompt tokens read — confirms prompt caching is working. */
+    /** Cached prompt tokens read (usually 0 here — this prompt is below the cache floor). */
     cacheReadTokens?: number
 }
 

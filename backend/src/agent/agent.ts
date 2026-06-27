@@ -7,7 +7,7 @@ import {
     type LanguageModelUsage,
     type UIMessage,
 } from 'ai'
-import { logUsage, normalizeUsage } from '../lib/usage'
+import { logUsage, normalizeUsage, type NormalizedUsage } from '../lib/usage'
 import { retrievalTools } from './tools'
 import { createUserTools } from './userTools'
 
@@ -100,6 +100,43 @@ function logChatFinish(
 }
 
 /**
+ * Sum the per-step usage of the steps that completed before an event. Typed to
+ * the three token fields it actually reads (a structural subset of the SDK's
+ * `LanguageModelUsage`) so it composes with both real steps and test fixtures.
+ */
+export function sumStepUsage(
+    steps: ReadonlyArray<{
+        usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+    }>,
+): NormalizedUsage {
+    const total = { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+    for (const step of steps) {
+        total.inputTokens += step.usage?.inputTokens ?? 0
+        total.outputTokens += step.usage?.outputTokens ?? 0
+        total.totalTokens += step.usage?.totalTokens ?? 0
+    }
+    return total
+}
+
+/**
+ * Client disconnect / abort: `onFinish` never fires, so the tokens already spent
+ * on completed steps would go unlogged (BAG-5). Sum the finished steps' usage and
+ * emit it with an `aborted` marker so the spend is still observable.
+ */
+function logChatAbort(
+    steps: ReadonlyArray<{
+        toolCalls?: ReadonlyArray<{ toolName: string }>
+        usage?: LanguageModelUsage
+    }>,
+): void {
+    const paths = summarizeToolPaths(steps)
+    logUsage('chat', AGENT_MODEL, sumStepUsage(steps), {
+        retrieval: paths.join('|') || 'none',
+        aborted: 'true',
+    })
+}
+
+/**
  * Run the agent loop over the conversation. Returns the streaming result;
  * the caller streams it to the client via `toUIMessageStreamResponse()`. Assumes
  * the query already passed the intent gate.
@@ -130,5 +167,6 @@ export async function runAgent(
         stopWhen: stepCountIs(MAX_STEPS),
         prepareStep: prepareAgentStep,
         onFinish: ({ steps, totalUsage }) => logChatFinish(steps, totalUsage),
+        onAbort: ({ steps }) => logChatAbort(steps),
     })
 }

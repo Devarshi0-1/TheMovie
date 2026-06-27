@@ -19,7 +19,14 @@ const MIN_LOCK_TTL_SECONDS = 300
 // silently overflows and fires almost immediately. Cap each timer at this and
 // CHAIN for longer periods so e.g. a multi-week interval can't melt down.
 const MAX_TIMEOUT_MS = 2_147_483_647
-/** Lock TTL for an externally-triggered (HTTP) run — fixed, generous for one run. */
+/**
+ * Lock TTL for an externally-triggered (HTTP) run — fixed, generous for one run.
+ * The lock is held (never explicitly released) for its full TTL, so two external
+ * triggers closer together than this return `skipped`. This is the single-flight
+ * guarantee, but it also fixes the *minimum* external-trigger cadence at 30 min:
+ * point the production cron at ≥30 min, or lower this TTL to allow finer-grained
+ * runs. (See BJOB-2.)
+ */
 export const ENDPOINT_LOCK_TTL_SECONDS = 1800
 
 export interface SchedulerConfig {

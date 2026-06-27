@@ -199,13 +199,14 @@
 - [ ] BTEST-4 — route-boundary integration tests.
 - [ ] BTEST-5/6 — movies success/500 + dimension-guard cases.
 
-**Polish (NITs)**
-- [ ] BAG-3 — tone down prompt-caching comments.
-- [ ] BAG-5 — log usage on client disconnect.
-- [ ] BSEC-5/6/7/8 — email verification, env-ify `localhost:3000`, uniform jobs status, env assertions.
-- [ ] BDB-6/7/8 — metadata trim, LIKE-escaping, misc cleanups.
-- [ ] BJOB-1/2 — first-run spike awareness, external-trigger cadence.
-- [ ] BST-7 — optional `concurrently` removal.
+**Polish (NITs)** — done in PR `fix/backend-nits` except where noted
+- [x] BAG-3 — toned down the prompt-caching comments (intent/summary; recommendations had none).
+- [x] BAG-5 — `onAbort` now aggregates finished-step usage and logs it with an `aborted` marker.
+- [~] BSEC-5/6/7/8 — 6/7/8 already landed in the main backend PR; BSEC-5 (email verification) intentionally left as a product decision.
+- [x] BDB-6/7/8 — metadata-blob rationale documented, LIKE metacharacters escaped (`escapeLike`), similarity-range comment corrected.
+- [x] BJOB-1 / BDB-3 (pagination) — `listCandidates` now oldest-first + capped (`MAX_CANDIDATES_PER_RUN`), smoothing the first-deploy spike.
+- [x] BJOB-2 — external-trigger cadence documented on `ENDPOINT_LOCK_TTL_SECONDS`.
+- [ ] BST-7 — optional `concurrently` removal (left as-is; dev-only convenience).
 
 ---
 

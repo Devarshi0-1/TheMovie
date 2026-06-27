@@ -102,7 +102,10 @@ export function prepareMovie(detail: MovieForIngest): PreparedMovie | null {
             releaseDate: detail.release_date || null,
             genres,
             keywords,
-            // Raw TMDB blob lives in the GIN-indexed metadata column.
+            // Full raw TMDB blob, stored un-indexed and never projected into
+            // queries (its GIN index was dropped in migration 0006). Kept whole
+            // — at a deliberate storage cost — as the self-healing source of
+            // truth, so new fields can be derived later without re-fetching TMDB.
             metadata: detail,
             sourceHash: contentHashFor(sourceText),
         },

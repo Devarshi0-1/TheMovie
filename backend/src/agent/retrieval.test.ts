@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import {
+    escapeLike,
     fetchFromTmdb,
     genreContains,
     getMovieDetails,
@@ -285,5 +286,27 @@ describe('getTrending', () => {
         const { deps } = fakeDeps({ tmdbTrending: async () => many })
         const out = await getTrending({ limit: 3 }, deps)
         expect(out).toHaveLength(3)
+    })
+})
+
+describe('escapeLike (BDB-7: literal substring matching)', () => {
+    // A single literal backslash, kept in one place so the expectations below
+    // read as character sequences rather than escape-soup.
+    const BS = '\\'
+
+    it('escapes LIKE wildcards so they match literally (feature)', () => {
+        expect(escapeLike('50% off')).toBe(`50${BS}% off`)
+        expect(escapeLike('a_b')).toBe(`a${BS}_b`)
+    })
+
+    it('escapes backslash first so an injected escape char is neutralized (edge)', () => {
+        // Input is one backslash; it must become two (escaped), not collapse.
+        expect(escapeLike(`a${BS}b`)).toBe(`a${BS}${BS}b`)
+        // Input `100%\_` → every metachar escaped: % _ and the backslash itself.
+        expect(escapeLike(`100%${BS}_`)).toBe(`100${BS}%${BS}${BS}${BS}_`)
+    })
+
+    it('leaves wildcard-free titles untouched (edge: common case)', () => {
+        expect(escapeLike('The Matrix')).toBe('The Matrix')
     })
 })
