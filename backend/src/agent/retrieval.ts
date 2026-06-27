@@ -105,10 +105,19 @@ function listItemToMovieResult(item: MovieListItem): MovieResult {
 
 // ── Injectable IO seams ──────────────────────────────────────────────────────
 
+// Which embedding column a kNN runs against: the plot vector (title/overview/
+// genre) or the audience-reception vector (review-summary). 'both' is handled a
+// level up by fusing two single-field rankings.
+export type SemanticSearchField = 'plot' | 'reception'
+
 export interface RetrievalDeps {
     sqlSearch: (filters: SqlSearchInput) => Promise<MovieResult[]>
     embedQuery: (text: string) => Promise<number[]>
-    knnSearch: (vector: number[], limit: number) => Promise<ScoredMovieResult[]>
+    knnSearch: (
+        vector: number[],
+        limit: number,
+        field: SemanticSearchField,
+    ) => Promise<ScoredMovieResult[]>
     tmdbSearchIds: (query: string) => Promise<number[]>
     tmdbDetail: (tmdbId: number) => Promise<MovieForIngest>
     writeBack: (details: MovieForIngest[]) => Promise<void>
@@ -142,14 +151,19 @@ function defaultDeps(): RetrievalDeps {
 
         embedQuery: (text) => embedText(text),
 
-        async knnSearch(vector, limit) {
+        async knnSearch(vector, limit, field) {
+            // Pick the vector column for this field. Both live in the same
+            // embedding space (text-embedding-3-small), so a query embedding can
+            // be compared against either; rows with a NULL vector are excluded so
+            // the HNSW index isn't asked to rank missing values.
+            const column = field === 'reception' ? movies.reviewSummaryEmbedding : movies.embedding
             // Cosine distance over the HNSW index; ascending distance = closest
             // first. similarity = 1 - distance, in [0, 1].
-            const distance = cosineDistance(movies.embedding, vector)
+            const distance = cosineDistance(column, vector)
             const rows = await db
                 .select({ ...MOVIE_COLUMNS, similarity: sql<number>`1 - (${distance})` })
                 .from(movies)
-                .where(isNotNull(movies.embedding))
+                .where(isNotNull(column))
                 .orderBy(distance)
                 .limit(limit)
             return rows.map((r) => ({ ...rowToMovieResult(r), similarity: r.similarity }))
@@ -186,13 +200,60 @@ export async function searchMoviesSql(
     return deps.sqlSearch(input)
 }
 
-/** Tier 2 — conceptual/thematic search via query embedding + pgvector kNN. */
+// Reciprocal-rank-fusion damping constant (the standard k=60). Larger k flattens
+// the contribution gap between ranks; 60 is the well-established default.
+const RRF_K = 60
+
+/**
+ * Fuse several rankings of the same items into one, by reciprocal rank: each
+ * ranking contributes 1/(k + rank) to an item's score, so an item ranked highly
+ * by BOTH the plot and reception vectors floats to the top. Items are deduped by
+ * tmdbId; the reported `similarity` is the best (max) cosine an item achieved in
+ * any ranking (kept meaningful), while ORDER follows the fused score.
+ */
+function fuseByReciprocalRank(rankings: ScoredMovieResult[][], limit: number): ScoredMovieResult[] {
+    const acc = new Map<number, { movie: ScoredMovieResult; rrf: number; bestSim: number }>()
+    for (const ranking of rankings) {
+        ranking.forEach((movie, idx) => {
+            const contribution = 1 / (RRF_K + idx + 1) // idx is 0-based → rank = idx+1
+            const existing = acc.get(movie.tmdbId)
+            if (existing) {
+                existing.rrf += contribution
+                existing.bestSim = Math.max(existing.bestSim, movie.similarity)
+            } else {
+                acc.set(movie.tmdbId, { movie, rrf: contribution, bestSim: movie.similarity })
+            }
+        })
+    }
+    return [...acc.values()]
+        .sort((a, b) => b.rrf - a.rrf)
+        .slice(0, limit)
+        .map(({ movie, bestSim }) => ({ ...movie, similarity: bestSim }))
+}
+
+/**
+ * Tier 2 — conceptual/thematic search via query embedding + pgvector kNN.
+ * `mode` selects the signal: 'plot' (what the film is about), 'reception' (how
+ * audiences received it), or 'both' (fuse two index-accelerated kNN by RRF).
+ */
 export async function semanticSearchMovies(
     input: SemanticSearchInput,
     deps: RetrievalDeps = defaultDeps(),
 ): Promise<ScoredMovieResult[]> {
     const vector = await deps.embedQuery(input.query)
-    return deps.knnSearch(vector, input.limit)
+    const mode = input.mode ?? 'both'
+
+    if (mode === 'plot') return deps.knnSearch(vector, input.limit, 'plot')
+    if (mode === 'reception') return deps.knnSearch(vector, input.limit, 'reception')
+
+    // 'both': pull a candidate pool from each vector (more than `limit` so the
+    // fusion has material to re-rank), then merge by reciprocal rank.
+    const pool = Math.min(20, input.limit * 2)
+    const [plot, reception] = await Promise.all([
+        deps.knnSearch(vector, pool, 'plot'),
+        deps.knnSearch(vector, pool, 'reception'),
+    ])
+    return fuseByReciprocalRank([plot, reception], input.limit)
 }
 
 /** Tier 3 — last-resort TMDB lookup; writes back so the catalog self-heals. */
