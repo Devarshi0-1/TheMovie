@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { ChatWindow } from '../components/ChatWindow'
 import { requireSession } from '../lib/auth'
 import { loadStoredConversationId, newConversationId, storeConversationId } from '../lib/chat'
@@ -32,23 +33,25 @@ function ChatScreen() {
     }
 
     return (
-        <main className="page chat-page">
-            <header className="chat-page__head">
+        <main className="mx-auto w-full max-w-[1100px] px-6 py-10">
+            <header className="mb-5 flex items-start justify-between gap-4">
                 <div>
-                    <h1 className="section-title">Chat</h1>
-                    <p className="chat-page__sub">
+                    <h1 className="text-xl font-semibold tracking-tight">Chat</h1>
+                    <p className="mt-1 text-muted-foreground">
                         Find films by describing them, get recommendations, and manage your
                         watchlist — conversationally.
                     </p>
                 </div>
-                <button
+                <Button
                     type="button"
-                    className="chat-page__new"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
                     onClick={startNewChat}
                     disabled={!conversationId}
                 >
                     New chat
-                </button>
+                </Button>
             </header>
             {/* Keyed by id so "New chat" fully remounts `useChat` with a fresh thread. */}
             {conversationId ? (

@@ -1,5 +1,7 @@
 import { ChatMessageInputSchema } from '@themovie/schemas'
 import { useForm } from '@tanstack/react-form'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 
 interface ChatComposerProps {
     onSend: (message: string) => void
@@ -28,7 +30,7 @@ export function ChatComposer({ onSend, streaming, onStop, disabled }: ChatCompos
 
     return (
         <form
-            className="composer"
+            className="flex items-end gap-2 border-t border-border bg-background p-3"
             onSubmit={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
@@ -40,9 +42,9 @@ export function ChatComposer({ onSend, streaming, onStop, disabled }: ChatCompos
             </label>
             <form.Field name="message">
                 {(field) => (
-                    <textarea
+                    <Textarea
                         id="chat-composer-input"
-                        className="composer__input"
+                        className="min-h-0 flex-1 resize-none"
                         name="message"
                         rows={2}
                         placeholder="Describe a movie, ask for a recommendation, or manage your watchlist…"
@@ -60,21 +62,20 @@ export function ChatComposer({ onSend, streaming, onStop, disabled }: ChatCompos
             </form.Field>
 
             {streaming ? (
-                <button type="button" className="composer__stop" onClick={onStop}>
+                <Button type="button" variant="outline" onClick={onStop}>
                     Stop
-                </button>
+                </Button>
             ) : (
                 <form.Subscribe
                     selector={(s) => ({ canSubmit: s.canSubmit, value: s.values.message })}
                 >
                     {({ canSubmit, value }) => (
-                        <button
+                        <Button
                             type="submit"
-                            className="composer__send"
                             disabled={disabled || !canSubmit || value.trim().length === 0}
                         >
                             Send
-                        </button>
+                        </Button>
                     )}
                 </form.Subscribe>
             )}

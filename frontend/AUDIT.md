@@ -6,7 +6,9 @@
 
 **Overall verdict:** Disciplined, above-average frontend. **No HIGH-severity correctness bugs.** Recurring themes: client-only route protection, duplicated query-keys/schemas/cache-logic, unsurfaced mutation errors, a lenient lint floor that can't catch async mistakes, and a styling layer that never adopted the intended Tailwind+shadcn system.
 
-> **Status (PR `fix/frontend-audit-findings`):** all reported findings addressed **except** the Tailwind v4 + shadcn migration (D4 — its own follow-up PR) and two items below. NITs now done in the second pass: TS-4 (SSR/browser API base split), CC-4 (stabler message-part keys), CC-7 (sr-only composer label), XC-5 (streaming-UI test), XC-6 (busy-state + WatchlistOutcome-branch tests).
+> **Status (PR `fix/frontend-audit-findings`):** all reported findings addressed **except** the Tailwind v4 + shadcn migration (D4) and two items below.
+>
+> **D4 — done** (PR `feat/tailwind-shadcn-migration`): migrated the whole frontend from the hand-written `app.css` (BEM) to **Tailwind v4 + shadcn/ui** via the shadcn CLI (radix base, nova style). All 15 components + 7 routes now use semantic tokens + shadcn primitives (`Button`/`Input`/`Field`/`Badge`/`Alert`/`Empty`/`Skeleton`/`Textarea`/`Spinner`/`Separator`); `cn()` from `@/lib/utils`; `@/*` alias. Light + dark theming via `prefers-color-scheme` (ST-4 closed). The styling-quality findings ST-1…ST-6 are resolved by the move (cn() for conditionals, shadcn focus-visible rings, Tailwind responsive utilities, token-based theming, per-component scope). `CLAUDE.md` updated to make Tailwind+shadcn official. NITs now done in the second pass: TS-4 (SSR/browser API base split), CC-4 (stabler message-part keys), CC-7 (sr-only composer label), XC-5 (streaming-UI test), XC-6 (busy-state + WatchlistOutcome-branch tests).
 >
 > **Two items remain, with reasons:**
 >
@@ -238,8 +240,8 @@ Current `.oxlintrc.json`: plugins `[react, typescript, jsx-a11y, import]`; `corr
 - [ ] D3 / LT-4 / XC-8 — root `tsconfig.base.json` (strict + `noUncheckedIndexedAccess`); all 3 packages extend it.
 - [ ] LT-2 — enable `react/exhaustive-deps: error`.
 - [ ] LT-3 — `suspicious: error` + `perf: warn`.
-- [ ] D4 — Tailwind v4 + shadcn migration (own sequenced plan; ST-1…ST-6, primitive table above).
-- [ ] Update `CLAUDE.md` to make Tailwind+shadcn (and tsgo-everywhere) official.
+- [x] D4 — Tailwind v4 + shadcn migration (done via shadcn CLI; ST-1…ST-6 resolved; dark+light theming).
+- [x] Update `CLAUDE.md` to make Tailwind+shadcn official (tsgo-everywhere already done in the backend PR).
 
 **Correctness / robustness**
 

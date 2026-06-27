@@ -1,4 +1,7 @@
 import type { MovieResult } from '@themovie/schemas'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Skeleton } from '@/components/ui/skeleton'
 import { MovieCardLink } from './MovieCardLink'
 
 interface MovieGridProps {
@@ -12,6 +15,8 @@ interface MovieGridProps {
 // Fixed (index-free) keys for skeleton placeholders.
 const SKELETON_KEYS = ['sk0', 'sk1', 'sk2', 'sk3', 'sk4', 'sk5', 'sk6', 'sk7', 'sk8', 'sk9']
 
+const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5'
+
 /**
  * Renders a responsive grid of clickable movie cards, with explicit
  * loading / error / empty states so every screen using it degrades gracefully.
@@ -19,9 +24,9 @@ const SKELETON_KEYS = ['sk0', 'sk1', 'sk2', 'sk3', 'sk4', 'sk5', 'sk6', 'sk7', '
 export function MovieGrid({ movies, isLoading, isError, emptyLabel, errorLabel }: MovieGridProps) {
     if (isLoading) {
         return (
-            <div className="movie-grid" aria-busy="true" data-testid="movie-grid-loading">
+            <div className={GRID_CLASS} aria-busy="true" data-testid="movie-grid-loading">
                 {SKELETON_KEYS.map((key) => (
-                    <div key={key} className="movie-card movie-card--skeleton" aria-hidden="true" />
+                    <Skeleton key={key} className="aspect-[2/3] rounded-xl" aria-hidden="true" />
                 ))}
             </div>
         )
@@ -29,18 +34,26 @@ export function MovieGrid({ movies, isLoading, isError, emptyLabel, errorLabel }
 
     if (isError) {
         return (
-            <p className="grid-state grid-state--error" role="alert">
-                {errorLabel ?? 'Something went wrong loading movies. Please try again.'}
-            </p>
+            <Alert variant="destructive">
+                <AlertDescription>
+                    {errorLabel ?? 'Something went wrong loading movies. Please try again.'}
+                </AlertDescription>
+            </Alert>
         )
     }
 
     if (!movies || movies.length === 0) {
-        return <p className="grid-state">{emptyLabel ?? 'No movies found.'}</p>
+        return (
+            <Empty>
+                <EmptyHeader>
+                    <EmptyTitle>{emptyLabel ?? 'No movies found.'}</EmptyTitle>
+                </EmptyHeader>
+            </Empty>
+        )
     }
 
     return (
-        <div className="movie-grid">
+        <div className={GRID_CLASS}>
             {movies.map((movie) => (
                 <MovieCardLink key={movie.tmdbId} movie={movie} />
             ))}

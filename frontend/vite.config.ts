@@ -1,5 +1,6 @@
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 // TanStack Start runs on plain Vite (no Vinxi). The Start plugin owns route-tree
@@ -14,5 +15,9 @@ import { defineConfig } from 'vite'
 // build + runtime/SSR verification pass rather than being bundled in.
 export default defineConfig({
     server: { port: 5173 },
-    plugins: [tanstackStart(), viteReact()],
+    // Vite resolves the `@/*` alias from tsconfig `paths` natively. `tailwindcss`
+    // is the Tailwind v4 Vite plugin. The Start plugin owns codegen + entries and
+    // must precede `viteReact`.
+    resolve: { tsconfigPaths: true },
+    plugins: [tailwindcss(), tanstackStart(), viteReact()],
 })

@@ -8,7 +8,7 @@ export function MovieCardLink({ movie }: { movie: MovieResult }) {
         <Link
             to="/movie/$id"
             params={{ id: String(movie.tmdbId) }}
-            className="movie-card-link"
+            className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={movie.title}
         >
             <MovieCard movie={movie} />

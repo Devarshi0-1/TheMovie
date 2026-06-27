@@ -1,4 +1,5 @@
 import type { MovieResult } from '@themovie/schemas'
+import { Badge } from '@/components/ui/badge'
 import { releaseYear } from '../lib/movies'
 
 const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w342'
@@ -9,26 +10,32 @@ const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w342'
  */
 export function MovieCard({ movie }: { movie: MovieResult }) {
     return (
-        <article className="movie-card">
-            <div className="movie-card__poster">
+        <article className="overflow-hidden rounded-xl border border-border bg-card transition hover:-translate-y-0.5 hover:border-primary">
+            <div className="aspect-[2/3] bg-muted">
                 {movie.posterPath ? (
                     <img
                         src={`${TMDB_POSTER_BASE}${movie.posterPath}`}
                         alt={`${movie.title} poster`}
                         loading="lazy"
+                        className="h-full w-full object-cover"
                     />
                 ) : (
-                    <div className="movie-card__poster--empty" aria-hidden="true">
+                    <div
+                        className="grid h-full w-full place-items-center text-4xl opacity-40"
+                        aria-hidden="true"
+                    >
                         🎬
                     </div>
                 )}
             </div>
-            <div className="movie-card__body">
-                <h3 className="movie-card__title">{movie.title}</h3>
-                <p className="movie-card__year">{releaseYear(movie)}</p>
-                <ul className="movie-card__genres">
+            <div className="p-3.5">
+                <h3 className="mb-0.5 text-sm leading-tight">{movie.title}</h3>
+                <p className="mb-2.5 text-xs text-muted-foreground">{releaseYear(movie)}</p>
+                <ul className="flex list-none flex-wrap gap-1.5 p-0">
                     {movie.genres.map((genre) => (
-                        <li key={genre}>{genre}</li>
+                        <li key={genre}>
+                            <Badge variant="secondary">{genre}</Badge>
+                        </li>
                     ))}
                 </ul>
             </div>

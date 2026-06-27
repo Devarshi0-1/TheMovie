@@ -1,6 +1,9 @@
 import type { MovieResult } from '@themovie/schemas'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty'
 import { MovieCardLink } from '../components/MovieCardLink'
 import { requireSession } from '../lib/auth'
 import { useRemoveFromWatchlist, watchlistQueryOptions } from '../lib/watchlist'
@@ -16,21 +19,28 @@ function WatchlistScreen() {
     const remove = useRemoveFromWatchlist()
 
     return (
-        <main className="page">
-            <h1 className="section-title">Your watchlist</h1>
+        <main className="mx-auto w-full max-w-[1100px] px-6 py-10">
+            <h1 className="mb-6 text-xl font-semibold tracking-tight">Your watchlist</h1>
 
             {isPending ? (
-                <p className="grid-state">Loading your watchlist…</p>
+                <p className="py-8 text-muted-foreground">Loading your watchlist…</p>
             ) : isError ? (
-                <p className="grid-state grid-state--error" role="alert">
-                    Couldn’t load your watchlist. Please try again.
-                </p>
+                <Alert variant="destructive">
+                    <AlertDescription>
+                        Couldn’t load your watchlist. Please try again.
+                    </AlertDescription>
+                </Alert>
             ) : data.length === 0 ? (
-                <p className="grid-state">
-                    Nothing saved yet. <Link to="/">Browse what’s trending</Link> and add a film.
-                </p>
+                <Empty>
+                    <EmptyHeader>
+                        <EmptyDescription>
+                            Nothing saved yet. <Link to="/">Browse what’s trending</Link> and add a
+                            film.
+                        </EmptyDescription>
+                    </EmptyHeader>
+                </Empty>
             ) : (
-                <div className="movie-grid">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5">
                     {data.map((entry) => {
                         const movie: MovieResult = {
                             tmdbId: entry.movieId,
@@ -41,16 +51,17 @@ function WatchlistScreen() {
                             posterPath: entry.posterPath,
                         }
                         return (
-                            <article key={entry.movieId} className="wl-item">
+                            <article key={entry.movieId} className="flex flex-col gap-2">
                                 <MovieCardLink movie={movie} />
-                                <button
+                                <Button
                                     type="button"
-                                    className="wl-remove"
+                                    variant="outline"
+                                    size="sm"
                                     onClick={() => remove.mutate(entry.movieId)}
                                     disabled={remove.isPending}
                                 >
                                     Remove
-                                </button>
+                                </Button>
                             </article>
                         )
                     })}

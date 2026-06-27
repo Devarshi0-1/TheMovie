@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { sessionQueryKey, signOut, useSession } from '../lib/auth'
 
 /**
@@ -27,51 +28,61 @@ export function AppHeader() {
         }
     }
 
+    const navLinkClass =
+        'text-sm text-muted-foreground transition-colors hover:text-foreground data-[status=active]:text-foreground'
+
     return (
-        <header className="appheader">
-            <div className="appheader__inner">
-                <Link to="/" className="appheader__brand">
-                    <span className="appheader__mark" aria-hidden="true">
+        <header className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur">
+            <div className="mx-auto flex max-w-[1100px] items-center gap-6 px-6 py-3.5">
+                <Link
+                    to="/"
+                    className="inline-flex items-center gap-2 font-bold tracking-tight text-foreground"
+                >
+                    <span className="text-lg" aria-hidden="true">
                         🎬
                     </span>
                     TheMovie
                 </Link>
 
-                <nav className="appheader__nav" aria-label="Primary">
-                    <Link to="/" className="appheader__link" activeOptions={{ exact: true }}>
+                <nav className="mr-auto flex gap-5" aria-label="Primary">
+                    <Link to="/" className={navLinkClass} activeOptions={{ exact: true }}>
                         Discover
                     </Link>
-                    <Link to="/chat" className="appheader__link">
+                    <Link to="/chat" className={navLinkClass}>
                         Chat
                     </Link>
-                    <Link to="/watchlist" className="appheader__link">
+                    <Link to="/watchlist" className={navLinkClass}>
                         Watchlist
                     </Link>
                 </nav>
 
-                <div className="appheader__auth">
+                <div className="flex items-center gap-3.5">
                     {isPending ? null : user ? (
                         <>
-                            <span className="appheader__user" title={user.email}>
+                            <span
+                                className="max-w-[16ch] truncate text-sm text-muted-foreground"
+                                title={user.email}
+                            >
                                 {user.name ?? user.email}
                             </span>
-                            <button
+                            <Button
                                 type="button"
-                                className="appheader__btn"
+                                variant="outline"
+                                size="sm"
                                 onClick={() => void handleSignOut()}
                                 disabled={signingOut}
                             >
                                 {signingOut ? 'Signing out…' : 'Sign out'}
-                            </button>
+                            </Button>
                         </>
                     ) : (
                         <>
-                            <Link to="/signin" className="appheader__link">
-                                Sign in
-                            </Link>
-                            <Link to="/signup" className="appheader__btn appheader__btn--primary">
-                                Sign up
-                            </Link>
+                            <Button asChild variant="ghost" size="sm">
+                                <Link to="/signin">Sign in</Link>
+                            </Button>
+                            <Button asChild size="sm">
+                                <Link to="/signup">Sign up</Link>
+                            </Button>
                         </>
                     )}
                 </div>

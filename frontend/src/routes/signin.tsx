@@ -35,13 +35,18 @@ function SignIn() {
     }
 
     return (
-        <main className="page auth">
-            <div className="auth__card">
-                <h1 className="auth__title">Welcome back</h1>
-                <p className="auth__sub">Sign in to save films and manage your watchlist.</p>
+        <main className="mx-auto grid min-h-[70vh] w-full max-w-[1100px] place-items-center px-6 py-10">
+            <div className="w-full max-w-[400px] rounded-xl border border-border bg-card p-8">
+                <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
+                <p className="mt-1.5 mb-6 text-sm text-muted-foreground">
+                    Sign in to save films and manage your watchlist.
+                </p>
                 <AuthForm mode="signin" onSubmit={handleSubmit} />
-                <p className="auth__alt">
-                    New to TheMovie? <Link to="/signup">Create an account</Link>
+                <p className="mt-5 text-center text-sm text-muted-foreground">
+                    New to TheMovie?{' '}
+                    <Link to="/signup" className="text-primary underline-offset-4 hover:underline">
+                        Create an account
+                    </Link>
                 </p>
             </div>
         </main>

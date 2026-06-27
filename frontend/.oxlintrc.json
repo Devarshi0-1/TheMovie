@@ -22,5 +22,12 @@
         "typescript/no-unnecessary-type-conversion": "off",
         "typescript/consistent-return": "off"
     },
-    "ignorePatterns": ["src/routeTree.gen.ts", "dist", ".output", ".nitro", "coverage"]
+    "ignorePatterns": [
+        "src/routeTree.gen.ts",
+        "src/components/ui",
+        "dist",
+        ".output",
+        ".nitro",
+        "coverage"
+    ]
 }

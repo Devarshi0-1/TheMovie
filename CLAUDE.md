@@ -21,6 +21,7 @@ The codebase is a workspace with three packages: **`backend/`** (Bun + Hono API)
 ### Frontend
 - **Framework:** **TanStack Start** + **React 19** (SSR, server functions). TanStack **Router ships inside Start** — don't install it separately; use its file-based, type-safe routing.
 - **Data fetching:** **TanStack Query** (server-state caching/mutations).
+- **Styling:** **Tailwind CSS v4** (via the `@tailwindcss/vite` plugin) + **shadcn/ui** (radix base, vendored into `src/components/ui/`, managed with the **shadcn CLI** — `bunx --bun shadcn@latest add …`, never hand-write `ui/` files). Use **semantic tokens** (`bg-background`, `text-primary`, `text-muted-foreground`, `border-border`, plus the project's `text-pro`/`text-con`/`bg-accent-soft`) and shadcn primitives (`Button`, `Input`, `Field`, `Badge`, `Alert`, `Empty`, `Skeleton`, …) over hand-rolled CSS; `cn()` from `@/lib/utils` for conditional classes. Theme tokens live in `src/styles/app.css` (light default + dark via `.dark`/`prefers-color-scheme`). The `@/*` import alias maps to `src/*`. Follow the **shadcn** skill's rules (gap not space, semantic colors, `size-*`, `data-icon` in buttons). `src/components/ui/` is vendored — excluded from oxlint.
 - **Toolchain:** **Vite+** with **oxlint** (lint), **oxfmt** (format), and **Vitest** (test). These are cutting-edge — pin versions; expect occasional editor-integration gaps with oxfmt/tsgo.
 - **Type checking:** **typescript-go (tsgo) v7** — the native TypeScript compiler.
 
@@ -38,7 +39,7 @@ The codebase is a workspace with three packages: **`backend/`** (Bun + Hono API)
 
 ### The zero-dependency ethos (and its exceptions)
 
-The **backend** deliberately avoids npm packages when Bun ships a native equivalent. Sanctioned exceptions: the AI layer (**Vercel AI SDK** — `ai`, `@ai-sdk/openai`, `@ai-sdk/react` — **OpenAI** for reasoning + embeddings, **pgvector**), **Zod**, and the already-chosen libraries (Hono, Drizzle, BetterAuth). The **frontend** is the TanStack/Vite+ ecosystem named above. Before adding **any** dependency outside these: check whether Bun, the framework, or an existing dep already covers it; if you genuinely need one, surface it for sign-off first.
+The **backend** deliberately avoids npm packages when Bun ships a native equivalent. Sanctioned exceptions: the AI layer (**Vercel AI SDK** — `ai`, `@ai-sdk/openai`, `@ai-sdk/react` — **OpenAI** for reasoning + embeddings, **pgvector**), **Zod**, and the already-chosen libraries (Hono, Drizzle, BetterAuth). The **frontend** is the TanStack/Vite+ ecosystem named above, **plus the styling stack** — **Tailwind CSS v4**, **shadcn/ui** and its supporting libraries (`radix-ui`, `lucide-react`, `class-variance-authority`, `clsx`, `tailwind-merge`, `tw-animate-css`). New `ui/` primitives come from the shadcn CLI, which pulls these as needed. Before adding **any** dependency outside these: check whether Bun, the framework, or an existing dep already covers it; if you genuinely need one, surface it for sign-off first.
 
 ## How to work on this codebase
 
