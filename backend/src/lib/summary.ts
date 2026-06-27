@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '../db'
 import { movies } from '../db/schema'
 import { redis } from './redis'
-import { getMovieReviews } from './tmdb'
+import { getMovieReviewMeta } from './tmdb'
 import { composeSummaryEmbeddingText, contentHashFor, embedText } from './embeddings'
 import { logUsage, normalizeUsage } from './usage'
 import { ReviewSummarySchema, type ReviewSummary } from '@themovie/schemas'
@@ -56,15 +56,16 @@ export interface StoredSummaryRecord {
     summary: ReviewSummary
     // The reception vector (Option B). Null when the summary text is empty.
     embedding: number[] | null
-    // SHA-256 of the summarized review text — the refresh job's change trigger.
+    // SHA-256 of the summarized review text — gates re-embedding.
     hash: string
-    // How many review bodies fed the summary — the refresh job's delta check.
+    // TMDB's total review count at summary time — the refresh job's delta trigger
+    // (count unchanged ⇒ reviews effectively unchanged ⇒ skip re-summarizing).
     reviewCount: number
 }
 
 /** IO seams, injected so the service is testable without TMDB / OpenAI / DB / Redis. */
 export interface SummaryDeps {
-    fetchReviews: (movieId: number) => Promise<string[]>
+    fetchReviewMeta: (movieId: number) => Promise<{ totalResults: number; reviews: string[] }>
     summarize: (reviewsText: string) => Promise<ReviewSummary>
     embedSummary: (text: string) => Promise<number[]>
     /** Durable read: the stored real summary for a movie, or null if none. */
@@ -75,9 +76,9 @@ export interface SummaryDeps {
     cacheSet: (key: string, value: string, ttlSeconds: number) => Promise<void>
 }
 
-function defaultDeps(): SummaryDeps {
+export function summaryDeps(): SummaryDeps {
     return {
-        fetchReviews: getMovieReviews,
+        fetchReviewMeta: getMovieReviewMeta,
         async summarize(reviewsText) {
             const { object, usage } = await generateObject({
                 model: openai(SUMMARY_MODEL),
@@ -138,6 +139,41 @@ function defaultDeps(): SummaryDeps {
 }
 
 /**
+ * Summarize a movie's reviews, embed the reception vector (Option B), persist
+ * durably to PG, and refresh the Redis hot cache. Shared by the on-demand miss
+ * path and the tiered refresh job, so both produce identical durable state.
+ * `totalResults` is stored as the delta trigger. Returns the summary.
+ */
+export async function generateAndStoreSummary(
+    movieId: number,
+    reviews: string[],
+    totalResults: number,
+    deps: SummaryDeps = summaryDeps(),
+): Promise<ReviewSummary> {
+    const reviewsText = composeReviewText(reviews)
+    const summary = await deps.summarize(reviewsText)
+
+    // Embed the reception vector (Option B), skipping a literally-empty summary.
+    const receptionText = composeSummaryEmbeddingText(summary)
+    const embedding = receptionText ? await deps.embedSummary(receptionText) : null
+
+    // Persist durably (best-effort — a DB failure must not fail the caller).
+    try {
+        await deps.saveStored(movieId, {
+            summary,
+            embedding,
+            hash: contentHashFor(reviewsText),
+            reviewCount: totalResults,
+        })
+    } catch (err) {
+        console.error(`⚠️ Failed to persist summary for movie ${movieId}:`, err)
+    }
+
+    await deps.cacheSet(cacheKey(movieId), JSON.stringify(summary), SUMMARY_TTL_SECONDS)
+    return summary
+}
+
+/**
  * Spoiler-free pros/cons + one-line vibe for a movie's audience reviews.
  *
  * Read-through: Redis hot cache → durable PG store → (on miss) summarize + embed
@@ -147,7 +183,7 @@ function defaultDeps(): SummaryDeps {
  */
 export async function summarizeReviews(
     movieId: number,
-    deps: SummaryDeps = defaultDeps(),
+    deps: SummaryDeps = summaryDeps(),
 ): Promise<ReviewSummary> {
     const key = cacheKey(movieId)
 
@@ -175,32 +211,12 @@ export async function summarizeReviews(
     }
 
     // 3. Generate.
-    const reviews = await deps.fetchReviews(movieId)
+    const { totalResults, reviews } = await deps.fetchReviewMeta(movieId)
     if (reviews.length === 0) {
         // Placeholder is Redis-only (short TTL) — not persisted to PG.
         await deps.cacheSet(key, JSON.stringify(EMPTY_SUMMARY), EMPTY_TTL_SECONDS)
         return EMPTY_SUMMARY
     }
 
-    const reviewsText = composeReviewText(reviews)
-    const summary = await deps.summarize(reviewsText)
-
-    // Embed the reception vector (Option B), skipping a literally-empty summary.
-    const receptionText = composeSummaryEmbeddingText(summary)
-    const embedding = receptionText ? await deps.embedSummary(receptionText) : null
-
-    // Persist durably (best-effort — a DB failure must not fail the response).
-    try {
-        await deps.saveStored(movieId, {
-            summary,
-            embedding,
-            hash: contentHashFor(reviewsText),
-            reviewCount: reviews.length,
-        })
-    } catch (err) {
-        console.error(`⚠️ Failed to persist summary for movie ${movieId}:`, err)
-    }
-
-    await deps.cacheSet(key, JSON.stringify(summary), SUMMARY_TTL_SECONDS)
-    return summary
+    return generateAndStoreSummary(movieId, reviews, totalResults, deps)
 }

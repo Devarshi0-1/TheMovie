@@ -15,7 +15,9 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: themovie
     ports:
-      - '5432:5432'
+      # Host 5433 → container 5432: a host-native Postgres already owns 5432, so
+      # publish on 5433 to avoid the shadowing conflict. DATABASE_URL points here.
+      - '5433:5432'
     volumes:
       - themovie-pgdata:/var/lib/postgresql/data
     healthcheck:

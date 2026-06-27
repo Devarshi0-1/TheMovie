@@ -6,6 +6,7 @@
         "db:migrate": "bun run src/db/migrate.ts",
         "db:generate": "bunx drizzle-kit generate",
         "ingest": "bun run src/jobs/ingest.ts",
+        "summaries:refresh": "bun run src/jobs/refresh-summaries.ts",
         "redis-start": "docker start my-movie-redis",
         "redis-stop": "docker stop my-movie-redis",
         "test": "bun test",
