@@ -144,7 +144,7 @@ describe('startSummaryRefreshScheduler', () => {
     it('arms a timer at the interval and returns a stop handle (feature)', () => {
         const { deps, calls } = fakeDeps()
         const handle = startSummaryRefreshScheduler({ intervalHours: 6, runOnBoot: false }, deps)
-        expect(calls.timers[0].ms).toBe(6 * 3_600_000)
+        expect(calls.timers[0]!.ms).toBe(6 * 3_600_000)
         handle?.stop()
         expect(calls.cleared).toBe(1)
     })
@@ -152,14 +152,14 @@ describe('startSummaryRefreshScheduler', () => {
     it('clamps a multi-week interval to the 32-bit max on the first arm (edge: overflow)', () => {
         const { deps, calls } = fakeDeps()
         startSummaryRefreshScheduler({ intervalHours: 24 * 40, runOnBoot: false }, deps) // 40 days
-        expect(calls.timers[0].ms).toBe(MAX_TIMEOUT_MS)
+        expect(calls.timers[0]!.ms).toBe(MAX_TIMEOUT_MS)
     })
 
     it('runs on each fire and re-arms (no pile-up) (feature: self-reschedule)', async () => {
         const { deps, calls } = fakeDeps()
         startSummaryRefreshScheduler({ intervalHours: 6, runOnBoot: false }, deps)
         expect(calls.runs).toBe(0) // nothing yet
-        calls.timers[0].fire() // simulate the timer firing
+        calls.timers[0]!.fire() // simulate the timer firing
         await new Promise((r) => setTimeout(r, 0))
         expect(calls.runs).toBe(1)
         expect(calls.timers).toHaveLength(2) // re-armed for the next period
@@ -176,7 +176,7 @@ describe('startSummaryRefreshScheduler', () => {
         const { deps, calls } = fakeDeps()
         const handle = startSummaryRefreshScheduler({ intervalHours: 6, runOnBoot: false }, deps)
         handle?.stop()
-        calls.timers[0].fire() // fires after stop → guarded no-op
+        calls.timers[0]!.fire() // fires after stop → guarded no-op
         await new Promise((r) => setTimeout(r, 0))
         expect(calls.runs).toBe(0)
     })

@@ -42,7 +42,7 @@ describe('logUsage', () => {
             totalTokens: 165,
             cachedTokens: 80,
         })
-        const line = spy.mock.calls[0][0] as string
+        const line = spy.mock.calls[0]![0] as string
         expect(line).toContain('label=chat')
         expect(line).toContain('model=gpt-5')
         expect(line).toContain('in=120')
@@ -54,7 +54,7 @@ describe('logUsage', () => {
     it('defaults cached to 0 and unknown tokens to ? (edge)', () => {
         const spy = spyOn(console, 'log').mockImplementation(() => {})
         logUsage('intent', 'gpt-5-mini', {})
-        const line = spy.mock.calls[0][0] as string
+        const line = spy.mock.calls[0]![0] as string
         expect(line).toContain('in=?')
         expect(line).toContain('cached=0')
     })
@@ -62,7 +62,7 @@ describe('logUsage', () => {
     it('appends call-specific meta fields (feature: e.g. retrieval path)', () => {
         const spy = spyOn(console, 'log').mockImplementation(() => {})
         logUsage('chat', 'gpt-5', { inputTokens: 1 }, { retrieval: 'sql|semantic', candidates: 12 })
-        const line = spy.mock.calls[0][0] as string
+        const line = spy.mock.calls[0]![0] as string
         expect(line).toContain('retrieval=sql|semantic')
         expect(line).toContain('candidates=12')
     })

@@ -48,7 +48,8 @@ When you have results, reason over them and reply with a short, ranked set of su
 /** The most recent user message in the conversation, if any. */
 export function lastUserMessage(messages: UIMessage[]): UIMessage | undefined {
     for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') return messages[i]
+        const message = messages[i]
+        if (message?.role === 'user') return message
     }
     return undefined
 }

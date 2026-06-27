@@ -44,8 +44,9 @@ export function createResilientRedis(create: () => RedisClient): RedisClient {
             const current = client
             const value = (current as unknown as Record<PropertyKey, unknown>)[prop]
             if (typeof value !== 'function') return value
+            // `prop` is known to be a function on the client (checked above).
             const invoke = (c: RedisClient) =>
-                (c as unknown as Record<PropertyKey, (...a: unknown[]) => unknown>)[prop]
+                (c as unknown as Record<PropertyKey, (...a: unknown[]) => unknown>)[prop]!
             return (...args: unknown[]) => {
                 let result: unknown
                 try {

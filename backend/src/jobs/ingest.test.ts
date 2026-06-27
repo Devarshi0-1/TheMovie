@@ -35,7 +35,7 @@ const fakeDeps = (existing: Record<number, string> = {}) => {
     const deps: IngestDeps = {
         async fetchExistingHashes(ids) {
             calls.hashLookups.push(ids)
-            return new Map(ids.filter((id) => id in existing).map((id) => [id, existing[id]]))
+            return new Map(ids.filter((id) => id in existing).map((id) => [id, existing[id]!]))
         },
         async upsertMovies(rows) {
             calls.upserted.push(rows)
@@ -116,7 +116,7 @@ describe('ingestMovies', () => {
         expect(stats).toMatchObject({ total: 2, prepared: 2, invalid: 0, embedded: 2, skipped: 0 })
         expect(calls.embedded[0]).toHaveLength(2)
         expect(calls.upserted[0]).toHaveLength(2)
-        expect(calls.upserted[0][0].embedding).toHaveLength(1536)
+        expect(calls.upserted[0]![0]!.embedding).toHaveLength(1536)
     })
 
     it('skips rows whose source hash is unchanged (feature: the cost rule)', async () => {
@@ -148,7 +148,7 @@ describe('ingestMovies', () => {
         expect(stats).toMatchObject({ embedded: 1, skipped: 1 })
         expect(calls.embedded[0]).toHaveLength(1) // only movie 2
         expect(calls.upserted[0]).toHaveLength(1)
-        expect(calls.upserted[0][0].tmdbId).toBe(2)
+        expect(calls.upserted[0]![0]!.tmdbId).toBe(2)
     })
 
     it('de-dupes a repeated tmdb_id within one batch, keeping the last (edge)', async () => {
@@ -160,7 +160,7 @@ describe('ingestMovies', () => {
 
         expect(stats).toMatchObject({ prepared: 1, embedded: 1 })
         expect(calls.upserted[0]).toHaveLength(1)
-        expect(calls.upserted[0][0].title).toBe('New')
+        expect(calls.upserted[0]![0]!.title).toBe('New')
     })
 
     it('counts invalid rows and ingests the rest (edge)', async () => {

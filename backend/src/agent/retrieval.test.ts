@@ -155,7 +155,7 @@ describe('semanticSearchMovies', () => {
             deps,
         )
         expect(calls.knnSearch).toHaveLength(1)
-        expect(calls.knnSearch[0].field).toBe('reception')
+        expect(calls.knnSearch[0]!.field).toBe('reception')
     })
 
     it("mode 'both' (default) queries plot AND reception then fuses by RRF (feature)", async () => {
@@ -178,12 +178,12 @@ describe('semanticSearchMovies', () => {
 
         // Both vectors were queried with a candidate pool larger than `limit`.
         expect(seen.map((c) => c.field).sort()).toEqual(['plot', 'reception'])
-        expect(seen[0].limit).toBeGreaterThan(3)
+        expect(seen[0]!.limit).toBeGreaterThan(3)
 
         // Movie 2 (high in BOTH) wins; movie 1 (top of plot + present in reception)
         // is second; result is deduped and capped at the limit.
         expect(out).toHaveLength(3)
-        expect(out[0].tmdbId).toBe(2)
+        expect(out[0]!.tmdbId).toBe(2)
         expect(out.map((m) => m.tmdbId)).toContain(1)
         // No duplicates across the fused rankings.
         expect(new Set(out.map((m) => m.tmdbId)).size).toBe(out.length)
@@ -210,10 +210,10 @@ describe('fetchFromTmdb', () => {
         const { deps, calls } = fakeDeps()
         const out = await fetchFromTmdb({ tmdbId: 27205, limit: 3 }, deps)
         expect(calls.tmdbDetail).toEqual([27205])
-        expect(out[0].title).toBe('Inception')
-        expect(out[0].genres).toEqual(['Science Fiction'])
+        expect(out[0]!.title).toBe('Inception')
+        expect(out[0]!.genres).toEqual(['Science Fiction'])
         expect(calls.writeBack).toHaveLength(1)
-        expect(calls.writeBack[0][0].id).toBe(27205)
+        expect(calls.writeBack[0]![0]!.id).toBe(27205)
     })
 
     it('searches by query, capping at limit, then enriches each (feature)', async () => {
@@ -255,7 +255,7 @@ describe('fetchFromTmdb', () => {
             },
         })
         const out = await fetchFromTmdb({ tmdbId: 27205, limit: 3 }, deps)
-        expect(out[0].title).toBe('Inception')
+        expect(out[0]!.title).toBe('Inception')
     })
 })
 

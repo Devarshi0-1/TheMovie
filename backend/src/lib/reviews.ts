@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { db } from '../db'
 import { review } from '../db/schema'
 import { redis } from './redis'
@@ -50,6 +50,7 @@ function defaultDeps(): ReviewDeps {
                     },
                 })
                 .returning()
+            if (!row) throw new Error('Review upsert returned no row')
             return toEntry(row)
         },
 

@@ -227,7 +227,7 @@ async function mapWithConcurrency<T, R>(
             const i = cursor++
             if (i >= items.length) break
             try {
-                results[i] = await fn(items[i])
+                results[i] = await fn(items[i]!)
             } catch (err) {
                 console.error(`⚠️ Enrichment failed for item ${i}:`, err)
                 results[i] = null

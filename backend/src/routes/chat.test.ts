@@ -134,22 +134,22 @@ describe('handleChat — agent path', () => {
         const { deps, agent } = makeDeps({ allowed: true, result: intentResult() }, { history })
         await handleChat(ctx({ conversationId: 'c1' }), deps)
         // agent saw history + the new user message, in order.
-        expect(agent.ran[0].map((m) => m.id)).toEqual(['old-u', 'old-a', 'u1'])
+        expect(agent.ran[0]!.map((m) => m.id)).toEqual(['old-u', 'old-a', 'u1'])
     })
 
     it('persists the new user + assistant turn via onFinish (feature: append)', async () => {
         const { deps, store } = makeDeps({ allowed: true, result: intentResult() })
         await handleChat(ctx({ conversationId: 'c1' }), deps)
         expect(store.saved).toHaveLength(1)
-        expect(store.saved[0].conversationId).toBe('c1')
-        expect(store.saved[0].messages.map((m) => m.role)).toEqual(['user', 'assistant'])
+        expect(store.saved[0]!.conversationId).toBe('c1')
+        expect(store.saved[0]!.messages.map((m) => m.role)).toEqual(['user', 'assistant'])
     })
 
     it('mints a conversation id when none is supplied and returns it in a header (edge)', async () => {
         const { deps, store } = makeDeps({ allowed: true, result: intentResult() })
         const res = await handleChat(ctx({ conversationId: undefined }), deps)
         expect(res.headers.get('X-Conversation-Id')).toBe('gen-0')
-        expect(store.saved[0].conversationId).toBe('gen-0')
+        expect(store.saved[0]!.conversationId).toBe('gen-0')
     })
 })
 
@@ -207,10 +207,10 @@ describe('handleChat — HITL tool-result continuation', () => {
         )
         await handleChat(ctx({ conversationId: 'c1', messages: continuation() }), deps)
         expect(agent.ran).toHaveLength(1)
-        const resolved = agent.ran[0].find((m) => m.id === 'a-prev')
+        const resolved = agent.ran[0]!.find((m) => m.id === 'a-prev')
         expect(resolved).toBeDefined()
         const part = (resolved!.parts as Array<{ state?: string }>)[0]
-        expect(part.state).toBe('output-available')
+        expect(part!.state).toBe('output-available')
     })
 
     it('persists the resolved turn + the new reply, not a duplicate user message (feature)', async () => {
@@ -221,8 +221,8 @@ describe('handleChat — HITL tool-result continuation', () => {
         await handleChat(ctx({ conversationId: 'c1', messages: continuation() }), deps)
         expect(store.saved).toHaveLength(1)
         // a-prev heals the dangling proposal; a1 is the fresh confirmation reply.
-        expect(store.saved[0].messages.map((m) => m.id)).toEqual(['a-prev', 'a1'])
-        expect(store.saved[0].messages.map((m) => m.role)).toEqual(['assistant', 'assistant'])
+        expect(store.saved[0]!.messages.map((m) => m.id)).toEqual(['a-prev', 'a1'])
+        expect(store.saved[0]!.messages.map((m) => m.role)).toEqual(['assistant', 'assistant'])
     })
 
     it('returns the conversation id header (edge: thread continuity)', async () => {
@@ -294,7 +294,7 @@ describe('handleChat — gate refusal path', () => {
             refusal: 'No.',
         })
         await handleChat(ctx({ conversationId: 'c1' }), deps)
-        expect(store.saved[0].messages.map((m) => m.role)).toEqual(['user', 'assistant'])
+        expect(store.saved[0]!.messages.map((m) => m.role)).toEqual(['user', 'assistant'])
     })
 })
 

@@ -24,7 +24,7 @@ function presentedSecret(headerGet: (name: string) => string | undefined): strin
     if (direct) return direct
     const auth = headerGet('Authorization') ?? ''
     const match = auth.match(/^Bearer\s+(.+)$/i)
-    return match ? match[1] : null
+    return match?.[1] ?? null
 }
 
 /**
