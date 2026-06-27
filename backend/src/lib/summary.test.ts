@@ -22,9 +22,14 @@ const fakeDeps = (over: Partial<SummaryDeps> = {}) => {
         cacheSet: [] as { key: string; ttl: number }[],
     }
     const deps: SummaryDeps = {
-        async fetchReviews() {
+        async fetchReviewMeta() {
             calls.fetch++
-            return ['Great movie, loved the acting.', 'A bit slow but worth it.']
+            // totalResults (17) intentionally differs from the 2 bodies, so tests
+            // assert the TMDB total — not the page-1 body count — is stored.
+            return {
+                totalResults: 17,
+                reviews: ['Great movie, loved the acting.', 'A bit slow but worth it.'],
+            }
         },
         async summarize() {
             calls.summarize++
@@ -69,7 +74,7 @@ describe('summarizeReviews', () => {
         expect(movieId).toBe(42)
         expect(record.summary).toEqual(summary)
         expect(record.embedding).toBe(fakeVector)
-        expect(record.reviewCount).toBe(2)
+        expect(record.reviewCount).toBe(17) // TMDB total, not the page-1 body count
         expect(record.hash).toMatch(/^[0-9a-f]{64}$/) // sha-256 of review text
     })
 
@@ -104,8 +109,8 @@ describe('summarizeReviews', () => {
 
     it('returns a neutral placeholder (short TTL, NOT persisted to PG) when there are no reviews (edge)', async () => {
         const { deps, calls } = fakeDeps({
-            async fetchReviews() {
-                return []
+            async fetchReviewMeta() {
+                return { totalResults: 0, reviews: [] }
             },
         })
         const out = await summarizeReviews(7, deps)

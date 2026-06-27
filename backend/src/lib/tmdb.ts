@@ -211,16 +211,28 @@ export const getMovieForIngest = (
 type MovieReviewsResponse =
     paths['/3/movie/{movie_id}/reviews']['get']['responses']['200']['content']['application/json']
 
-// Returns just the review bodies (the text we summarize). Cached for an hour;
-// reviews accrue slowly, so a hit serving the same array on both paths is fine.
-export const getMovieReviews = async (
+/**
+ * Review bodies (the text we summarize) plus `totalResults` — TMDB's count of
+ * ALL reviews for the movie, not just this page. The count is the refresh job's
+ * change trigger: if it hasn't moved since the last summary, the reviews are
+ * effectively unchanged and we skip re-summarizing (a cost rule). One cached
+ * call serves both — reviews accrue slowly, so the hour TTL is plenty.
+ */
+export const getMovieReviewMeta = async (
     movieId: number,
     cache: TmdbCache = redisCache,
-): Promise<string[]> => {
+): Promise<{ totalResults: number; reviews: string[] }> => {
     const data = await cached(cache, `movie:${movieId}:reviews`, () =>
         fetchFromTMDB<MovieReviewsResponse>(`/movie/${movieId}/reviews?language=en-US&page=1`),
     )
-    return (data.results ?? [])
+    const reviews = (data.results ?? [])
         .map((r) => r.content)
         .filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+    return { totalResults: data.total_results ?? reviews.length, reviews }
 }
+
+// Returns just the review bodies (the text we summarize).
+export const getMovieReviews = async (
+    movieId: number,
+    cache: TmdbCache = redisCache,
+): Promise<string[]> => (await getMovieReviewMeta(movieId, cache)).reviews
