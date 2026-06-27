@@ -28,4 +28,9 @@ describe('movies route input validation', () => {
         const res = await moviesRoute.request('/abc/summary')
         expect(res.status).toBe(400)
     })
+
+    it('rejects a non-numeric id for the extras route (edge)', async () => {
+        const res = await moviesRoute.request('/abc/extras')
+        expect(res.status).toBe(400)
+    })
 })

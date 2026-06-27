@@ -157,6 +157,56 @@ export const getMovieDetails = (movieId: string, cache: TmdbCache = redisCache) 
         fetchFromTMDB<MovieDetailsResponse>(`/movie/${movieId}?language=en-US`),
     )
 
+// Detail-screen enrichment: cast/crew, videos, recommendations, and where-to-watch
+// in ONE TMDB request via append_to_response (cheaper than four round-trips, one
+// cache entry). The combined payload is mapped to `MovieExtras` by `movieView`.
+export type MovieExtrasResponse = MovieDetailsResponse & {
+    credits?: {
+        cast?: {
+            id?: number
+            name?: string
+            character?: string | null
+            profile_path?: string | null
+        }[]
+        crew?: { name?: string; job?: string }[]
+    }
+    videos?: {
+        results?: {
+            key?: string
+            name?: string
+            site?: string
+            type?: string
+            official?: boolean
+        }[]
+    }
+    recommendations?: { results?: MovieListItem[] }
+    'watch/providers'?: {
+        results?: Record<
+            string,
+            {
+                link?: string | null
+                flatrate?: {
+                    provider_id?: number
+                    provider_name?: string
+                    logo_path?: string | null
+                }[]
+                rent?: { provider_id?: number; provider_name?: string; logo_path?: string | null }[]
+                buy?: { provider_id?: number; provider_name?: string; logo_path?: string | null }[]
+            }
+        >
+    }
+}
+
+export const getMovieExtras = (
+    movieId: string,
+    cache: TmdbCache = redisCache,
+): Promise<MovieExtrasResponse> =>
+    cached(cache, `movie:${movieId}:extras`, () =>
+        fetchFromTMDB<MovieExtrasResponse>(
+            `/movie/${movieId}?language=en-US&append_to_response=credits,videos,recommendations,watch/providers`,
+        ),
+    )
+
 // ── Ingestion catalog endpoints (Phase 3.3) ──────────────────────────────────
 // Paginated catalog feeds the ingestion pipeline reads to discover movies to
 // embed. Backfill seeds from `/discover/movie` (popularity-ordered); the

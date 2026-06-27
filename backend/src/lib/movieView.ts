@@ -1,4 +1,12 @@
-import type { MovieDetailView, MovieResult } from '@themovie/schemas'
+import type {
+    CastMember,
+    MovieDetailView,
+    MovieExtras,
+    MovieResult,
+    MovieVideo,
+    WatchProvider,
+    WatchProviders,
+} from '@themovie/schemas'
 
 // Maps TMDB's raw snake_case payloads onto the shared camelCase display schemas
 // (DL-10). This used to live in the frontend, which forced every consumer of the
@@ -98,5 +106,134 @@ export function toMovieDetailView(raw: TmdbDetailLike, fallbackId: number): Movi
         tagline: raw.tagline ?? null,
         runtime: raw.runtime ?? null,
         voteAverage: raw.vote_average ?? null,
+    }
+}
+
+// ── Movie extras (cast, trailer, where-to-watch, recommendations) ────────────
+
+// Top-billed cast shown on the detail screen; TMDB already returns cast in
+// billing order, so we take the first slice and drop any malformed entry.
+const CAST_LIMIT = 12
+const RECOMMENDATIONS_LIMIT = 12
+// Default region for where-to-watch; the route accepts a `?region=` override.
+export const DEFAULT_WATCH_REGION = 'US'
+
+type RawVideo = { key?: string; name?: string; site?: string; type?: string; official?: boolean }
+
+/**
+ * Pick the single best trailer to embed: prefer YouTube `Trailer`s over teasers,
+ * and official over fan-uploaded. Returns null when there's no embeddable video.
+ */
+export function pickTrailer(videos: RawVideo[] | undefined): MovieVideo | null {
+    const youtube = (videos ?? []).filter(
+        (v): v is RawVideo & { key: string } =>
+            v.site === 'YouTube' && typeof v.key === 'string' && v.key.length > 0,
+    )
+    if (youtube.length === 0) return null
+
+    const score = (v: RawVideo): number =>
+        (v.type === 'Trailer' ? 2
+        : v.type === 'Teaser' ? 1
+        : 0) + (v.official ? 0.5 : 0)
+    const best = youtube.reduce((a, b) => (score(b) > score(a) ? b : a))
+
+    return {
+        key: best.key,
+        name: best.name ?? 'Trailer',
+        site: 'YouTube',
+        type: best.type ?? 'Trailer',
+    }
+}
+
+interface RawProvider {
+    provider_id?: number
+    provider_name?: string
+    logo_path?: string | null
+}
+
+interface RawRegionProviders {
+    link?: string | null
+    flatrate?: RawProvider[]
+    rent?: RawProvider[]
+    buy?: RawProvider[]
+}
+
+const mapProviders = (list: RawProvider[] | undefined): WatchProvider[] =>
+    (list ?? [])
+        .filter((p) => typeof p.provider_id === 'number' && typeof p.provider_name === 'string')
+        .map((p) => ({
+            id: p.provider_id as number,
+            name: p.provider_name as string,
+            logoPath: p.logo_path ?? null,
+        }))
+
+/**
+ * Where-to-watch for one region. TMDB keys providers by country code; we read
+ * the requested region (default US) and return null when that region has no
+ * offers at all, so the UI can omit the section rather than render an empty one.
+ */
+export function toWatchProviders(
+    raw: Record<string, RawRegionProviders> | undefined,
+    region: string = DEFAULT_WATCH_REGION,
+): WatchProviders | null {
+    const entry = raw?.[region]
+    if (!entry) return null
+
+    const flatrate = mapProviders(entry.flatrate)
+    const rent = mapProviders(entry.rent)
+    const buy = mapProviders(entry.buy)
+    if (flatrate.length === 0 && rent.length === 0 && buy.length === 0) return null
+
+    return { region, link: entry.link ?? null, flatrate, rent, buy }
+}
+
+// Structural shape of the append_to_response payload — only the fields the
+// mapper reads (kept local, like TmdbDetailLike, rather than the full generated
+// detail type which demands `adult`, `budget`, … the mapper never touches).
+interface TmdbExtrasLike {
+    credits?: {
+        cast?: {
+            id?: number
+            name?: string
+            character?: string | null
+            profile_path?: string | null
+        }[]
+        crew?: { name?: string; job?: string }[]
+    }
+    videos?: { results?: RawVideo[] }
+    recommendations?: { results?: TmdbListItemLike[] }
+    'watch/providers'?: { results?: Record<string, RawRegionProviders> }
+}
+
+/**
+ * Map TMDB's append_to_response payload onto the `MovieExtras` view model:
+ * top-billed cast, the director, the best trailer, where-to-watch (for `region`),
+ * and "more like this" recommendations.
+ */
+export function toMovieExtrasView(
+    raw: TmdbExtrasLike,
+    region: string = DEFAULT_WATCH_REGION,
+): MovieExtras {
+    const cast: CastMember[] = (raw.credits?.cast ?? [])
+        .slice(0, CAST_LIMIT)
+        .filter((c) => typeof c.id === 'number' && typeof c.name === 'string')
+        .map((c) => ({
+            id: c.id as number,
+            name: c.name as string,
+            character: c.character ?? null,
+            profilePath: c.profile_path ?? null,
+        }))
+
+    const director = (raw.credits?.crew ?? []).find((c) => c.job === 'Director')?.name ?? null
+
+    return {
+        cast,
+        director,
+        trailer: pickTrailer(raw.videos?.results),
+        watchProviders: toWatchProviders(raw['watch/providers']?.results, region),
+        recommendations: toMovieResults(raw.recommendations?.results ?? []).slice(
+            0,
+            RECOMMENDATIONS_LIMIT,
+        ),
     }
 }

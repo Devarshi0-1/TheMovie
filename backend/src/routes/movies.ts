@@ -1,7 +1,12 @@
 import { Hono } from 'hono'
 import { MovieIdSchema } from '@themovie/schemas'
-import { getMovieDetails, getTrendingMovies, searchMovie } from '../lib/tmdb'
-import { toMovieDetailView, toMovieResults } from '../lib/movieView'
+import { getMovieDetails, getMovieExtras, getTrendingMovies, searchMovie } from '../lib/tmdb'
+import {
+    DEFAULT_WATCH_REGION,
+    toMovieDetailView,
+    toMovieExtrasView,
+    toMovieResults,
+} from '../lib/movieView'
 import { summarizeReviews } from '../lib/summary'
 
 // These endpoints proxy TMDB but speak the shared camelCase contract — the
@@ -66,6 +71,29 @@ moviesRoute.get('/:id', async (c) => {
     } catch (error) {
         console.error('Error fetching movie details:', error)
         return c.json({ error: 'Failed to fetch movie details' }, 500)
+    }
+})
+
+// Detail-screen enrichment: cast, director, trailer, where-to-watch, and
+// "more like this". One TMDB append_to_response call behind this route. The
+// `region` query (default US) selects which country's watch providers to return.
+moviesRoute.get('/:id/extras', async (c) => {
+    try {
+        const id = MovieIdSchema.safeParse(c.req.param('id'))
+        if (!id.success) {
+            return c.json({ error: 'A valid movie ID is required' }, 400)
+        }
+
+        // Normalize to a 2-letter ISO country code; fall back to the default.
+        const rawRegion = c.req.query('region')?.trim().toUpperCase()
+        const region = rawRegion && /^[A-Z]{2}$/.test(rawRegion) ? rawRegion : DEFAULT_WATCH_REGION
+
+        const extras = await getMovieExtras(String(id.data))
+
+        return c.json(toMovieExtrasView(extras, region))
+    } catch (error) {
+        console.error('Error fetching movie extras:', error)
+        return c.json({ error: 'Failed to fetch movie extras' }, 500)
     }
 })
 

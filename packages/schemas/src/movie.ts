@@ -49,6 +49,57 @@ export type MovieDetailView = z.infer<typeof MovieDetailViewSchema>
  */
 export const MovieIdSchema = z.coerce.number().int().positive()
 
+// ── Movie extras (cast, trailer, where-to-watch, recommendations) ────────────
+// The detail screen's enrichment payload (`GET /api/v1/movies/:id/extras`). One
+// TMDB call (append_to_response) feeds all four; the backend maps the raw
+// snake_case onto these so the frontend only validates.
+
+/** A top-billed cast member. `profilePath` is a TMDB image path (or null). */
+export const CastMemberSchema = z.object({
+    id: z.number().int(),
+    name: z.string(),
+    character: z.string().nullable(),
+    profilePath: z.string().nullable(),
+})
+export type CastMember = z.infer<typeof CastMemberSchema>
+
+/** A trailer/teaser video — always a YouTube `key` the client embeds. */
+export const MovieVideoSchema = z.object({
+    key: z.string(),
+    name: z.string(),
+    site: z.string(),
+    type: z.string(),
+})
+export type MovieVideo = z.infer<typeof MovieVideoSchema>
+
+/** A streaming/rent/buy provider (JustWatch data via TMDB). */
+export const WatchProviderSchema = z.object({
+    id: z.number().int(),
+    name: z.string(),
+    logoPath: z.string().nullable(),
+})
+export type WatchProvider = z.infer<typeof WatchProviderSchema>
+
+/** Where-to-watch for one region, split by offer type. */
+export const WatchProvidersSchema = z.object({
+    region: z.string(),
+    link: z.string().nullable(),
+    flatrate: z.array(WatchProviderSchema),
+    rent: z.array(WatchProviderSchema),
+    buy: z.array(WatchProviderSchema),
+})
+export type WatchProviders = z.infer<typeof WatchProvidersSchema>
+
+/** The aggregate extras payload for the detail screen. Any field can be empty/null. */
+export const MovieExtrasSchema = z.object({
+    cast: z.array(CastMemberSchema),
+    director: z.string().nullable(),
+    trailer: MovieVideoSchema.nullable(),
+    watchProviders: WatchProvidersSchema.nullable(),
+    recommendations: z.array(MovieResultSchema),
+})
+export type MovieExtras = z.infer<typeof MovieExtrasSchema>
+
 // ── Tool input schemas ───────────────────────────────────────────────────────
 // Bounded `limit`s cap fan-out/cost; `.default()` lets the agent omit them.
 

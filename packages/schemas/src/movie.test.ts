@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
     FetchFromTmdbInputSchema,
     MovieDetailsInputSchema,
+    MovieExtrasSchema,
     MovieResultSchema,
     ReviewSummaryInputSchema,
     ReviewSummarySchema,
@@ -9,6 +10,7 @@ import {
     SemanticSearchInputSchema,
     SqlSearchInputSchema,
     TrendingInputSchema,
+    WatchProvidersSchema,
 } from './movie'
 
 describe('MovieResultSchema', () => {
@@ -92,6 +94,43 @@ describe('tool input schemas', () => {
 
     it('Trending defaults limit to 10 (feature)', () => {
         expect(TrendingInputSchema.parse({}).limit).toBe(10)
+    })
+})
+
+describe('MovieExtrasSchema', () => {
+    it('parses a full extras payload (feature)', () => {
+        const parsed = MovieExtrasSchema.parse({
+            cast: [{ id: 1, name: 'Leo', character: 'Cobb', profilePath: '/p.jpg' }],
+            director: 'Nolan',
+            trailer: { key: 'abc', name: 'Trailer', site: 'YouTube', type: 'Trailer' },
+            watchProviders: {
+                region: 'US',
+                link: 'https://x',
+                flatrate: [{ id: 8, name: 'Netflix', logoPath: '/nf.jpg' }],
+                rent: [],
+                buy: [],
+            },
+            recommendations: [],
+        })
+        expect(parsed.cast[0]?.name).toBe('Leo')
+        expect(parsed.trailer?.key).toBe('abc')
+    })
+
+    it('accepts an empty/null extras payload (edge: nothing to show)', () => {
+        const parsed = MovieExtrasSchema.parse({
+            cast: [],
+            director: null,
+            trailer: null,
+            watchProviders: null,
+            recommendations: [],
+        })
+        expect(parsed.watchProviders).toBeNull()
+    })
+
+    it('WatchProvidersSchema requires the offer-type arrays (edge)', () => {
+        expect(() =>
+            WatchProvidersSchema.parse({ region: 'US', link: null, flatrate: [] }),
+        ).toThrow()
     })
 })
 
