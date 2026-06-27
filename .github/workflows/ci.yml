@@ -28,6 +28,12 @@ jobs:
 
       - name: Test
         run: bun test
+        # The offline suite never opens a connection (Bun.SQL is lazy), but
+        # `db/index.ts` fail-fasts at import if DATABASE_URL is unset. A
+        # placeholder satisfies that guard without a live DB; the real
+        # integration tests are opt-in behind RUN_DB_INTEGRATION.
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci_placeholder
 
   frontend:
     name: Frontend — lint + typecheck + test
