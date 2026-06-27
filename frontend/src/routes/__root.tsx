@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { AppHeader } from '../components/AppHeader'
+import { Toaster } from '../components/ui/sonner'
 import appCss from '../styles/app.css?url'
 
 // The root route owns the entire HTML document. `HeadContent` flushes the
@@ -25,6 +26,7 @@ function RootComponent() {
         <RootDocument>
             <AppHeader />
             <Outlet />
+            <Toaster richColors closeButton />
         </RootDocument>
     )
 }

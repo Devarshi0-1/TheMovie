@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { z } from 'zod'
 import { AuthForm } from '../components/AuthForm'
 import {
@@ -31,6 +32,7 @@ function SignIn() {
         // Both modes carry email + password; sign-in needs only those.
         await signIn({ email: values.email, password: values.password })
         await queryClient.invalidateQueries({ queryKey: sessionQueryKey })
+        toast.success('Signed in')
         void navigate({ to: dest })
     }
 

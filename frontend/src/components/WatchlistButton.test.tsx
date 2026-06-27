@@ -1,8 +1,14 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { sessionQueryKey } from '../lib/auth'
 import { makeTestQueryClient, renderWithProviders } from '../test/providers'
 import { WatchlistButton } from './WatchlistButton'
+
+// Toasts fire from a portal we don't mount here; assert on the call instead.
+vi.mock('sonner', () => ({
+    toast: { success: vi.fn(), error: vi.fn() },
+}))
 
 function jsonResponse(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), {
@@ -31,6 +37,7 @@ function signedInClient() {
 
 afterEach(() => {
     vi.unstubAllGlobals()
+    vi.clearAllMocks()
 })
 
 const PROPS = { movieId: 550, title: 'Fight Club', posterPath: '/p.jpg' }
@@ -51,6 +58,31 @@ describe('<WatchlistButton />', () => {
                 ),
             ).toBe(true),
         )
+
+        await waitFor(() =>
+            expect(toast.success).toHaveBeenCalledWith('Added “Fight Club” to your watchlist'),
+        )
+    })
+
+    // ── Edge case: a failed mutation toasts an error ──────────────────────
+    it('shows an error toast when the add request fails', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string, init?: RequestInit) => {
+                const method = init?.method ?? 'GET'
+                if (url.includes('/status')) return jsonResponse({ inWatchlist: false })
+                if (method === 'POST') return jsonResponse({ error: 'nope' }, 500)
+                return jsonResponse({})
+            }),
+        )
+        renderWithProviders(<WatchlistButton {...PROPS} />, signedInClient())
+
+        fireEvent.click(await screen.findByRole('button', { name: '+ Add to watchlist' }))
+
+        await waitFor(() =>
+            expect(toast.error).toHaveBeenCalledWith('Couldn’t add “Fight Club”. Try again.'),
+        )
+        expect(toast.success).not.toHaveBeenCalled()
     })
 
     it('shows an active state when the movie is already on the watchlist', async () => {

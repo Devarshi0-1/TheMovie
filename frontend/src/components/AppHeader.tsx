@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { sessionQueryKey, signOut, useSession } from '../lib/auth'
 
@@ -25,6 +26,7 @@ export function AppHeader() {
         } finally {
             await queryClient.invalidateQueries({ queryKey: sessionQueryKey })
             setSigningOut(false)
+            toast.success('Signed out')
         }
     }
 

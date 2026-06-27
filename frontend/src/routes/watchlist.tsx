@@ -1,6 +1,7 @@
 import type { MovieResult } from '@themovie/schemas'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty'
@@ -57,7 +58,18 @@ function WatchlistScreen() {
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => remove.mutate(entry.movieId)}
+                                    onClick={() =>
+                                        remove.mutate(entry.movieId, {
+                                            onSuccess: () =>
+                                                toast.success(
+                                                    `Removed “${entry.title}” from your watchlist`,
+                                                ),
+                                            onError: () =>
+                                                toast.error(
+                                                    `Couldn’t remove “${entry.title}”. Try again.`,
+                                                ),
+                                        })
+                                    }
                                     disabled={remove.isPending}
                                 >
                                     Remove

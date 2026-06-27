@@ -242,6 +242,33 @@ Lives in `frontend/`. Shares Zod schemas with the backend via `packages/schemas/
 
 ---
 
+## 🚩 Phase 9: Frontend UX polish & accessibility _(best-practices audit)_
+
+A pass to hold the frontend to recognized UI/UX best practices. The audit (2026-06-28) found the app already **well above baseline** — skeleton loaders (not "Loading…" text) in `MovieGrid`, real `Empty` states, `Alert`-based errors, pending/disabled buttons, lazy-loaded posters with 🎬 fallbacks, and solid streaming chat UX (stop/regenerate, tool-activity trail). This phase tracks the remaining gaps, ranked by user impact.
+
+### Reference standards (the "do this, not that" sources we audit against)
+- **[Checklist Design](https://www.checklist.design/)** — per-component UI/UX checklists (loaders, empty/error states, forms).
+- **[Refactoring UI](https://www.refactoringui.com/)** (Wathan/Schoger) — practical visual-polish heuristics; the Tailwind team's canon.
+- **[Laws of UX](https://lawsofux.com/)** — Doherty Threshold (skeletons feel faster than spinners), Jakob's Law, etc.
+- **[Nielsen Norman Group](https://www.nngroup.com/articles/)** — the 10 usability heuristics; skeleton-screen research.
+- **[The A11Y Project checklist](https://www.a11yproject.com/checklist/)** — accessibility (icon-button labels, focus, keyboard nav).
+- **[web.dev](https://web.dev/) / Core Web Vitals** — lazy loading, CLS from missing aspect ratios.
+- **[shadcn/ui](https://ui.shadcn.com/)** — our component library; ships `Skeleton`, `Empty`, `Alert`, `Sonner` as first-class.
+
+### Milestone 9.1: Action feedback (toasts)
+* [x] **Toast notifications via Sonner** (shadcn `sonner`, `prefers-color-scheme`-driven — no `next-themes`): `<Toaster richColors closeButton />` mounted in `__root.tsx`; success/error toasts on **watchlist add/remove** (`WatchlistButton` + the `/watchlist` Remove button) and **auth** (sign in / sign up / sign out). Toasts fire at the **call sites**, not inside the shared `useAddToWatchlist`/`useRemoveFromWatchlist` hooks, so the chat HITL batch flow (`WatchlistConfirm`) keeps its own inline outcome instead of firing one toast per movie. Tests assert the success/error `toast` calls (mocked `sonner`).
+
+### Milestone 9.2: Remaining gaps _(unstarted)_
+* [ ] **Destructive-action confirmation** — watchlist Remove is one click with no confirm/undo (`watchlist.tsx`); add an undo affordance (Sonner action toast) or a confirm step.
+* [ ] **Detail-page skeleton** — `movie/$id` only skeletons the review summary; show skeletons for title/genres/overview on initial load too (`movie.$id.tsx`).
+* [ ] **Responsive typography** — headlines scale once (`sm:`); add `lg:`/`xl:` steps for large screens (`index.tsx`, `movie.$id.tsx`).
+* [ ] **Icon-only button audit** — most have `aria-label`/`sr-only`, but verify systematically across all icon buttons (A11Y checklist).
+* [ ] **Keyboard-hint affordance** — surface the chat composer's Enter / Shift+Enter behavior in the UI (title/help text), not just a code comment.
+
+> Every frontend change here ships feature tests + edge-case tests (Vitest) + a UX overview, per `CLAUDE.md`.
+
+---
+
 ## Environment variables
 
 ```

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useSession } from '../lib/auth'
 import {
@@ -51,8 +52,23 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
     const failed = add.isError || remove.isError
 
     function toggle() {
-        if (inList) remove.mutate(movieId)
-        else add.mutate({ movieId, title, posterPath })
+        // Toast at the call site (not in the shared hooks) so the chat HITL flow,
+        // which reuses these hooks for batch changes, keeps its own inline outcome
+        // instead of firing one toast per movie.
+        if (inList) {
+            remove.mutate(movieId, {
+                onSuccess: () => toast.success(`Removed “${title}” from your watchlist`),
+                onError: () => toast.error(`Couldn’t remove “${title}”. Try again.`),
+            })
+        } else {
+            add.mutate(
+                { movieId, title, posterPath },
+                {
+                    onSuccess: () => toast.success(`Added “${title}” to your watchlist`),
+                    onError: () => toast.error(`Couldn’t add “${title}”. Try again.`),
+                },
+            )
+        }
     }
 
     return (
