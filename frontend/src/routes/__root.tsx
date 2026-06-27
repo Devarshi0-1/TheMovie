@@ -7,9 +7,11 @@ import {
     Scripts,
     useRouterState,
 } from '@tanstack/react-router'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import { AppHeader } from '../components/AppHeader'
+import { AppShell } from '../components/AppShell'
 import { Toaster } from '../components/ui/sonner'
+import { useFocusOnNavigate } from '../lib/navigation'
 import appCss from '../styles/app.css?url'
 
 // The root route owns the entire HTML document. `HeadContent` flushes the
@@ -27,7 +29,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     component: RootComponent,
 })
 
+// Auth/landing pages keep the plain top header; everything else (Discover, Chat,
+// Watchlist, movie detail) renders inside the sidebar app shell.
+const AUTH_ROUTES = new Set(['/signin', '/signup'])
+
 function RootComponent() {
+    const pathname = useRouterState({ select: (s) => s.location.pathname })
+    const isAuthRoute = AUTH_ROUTES.has(pathname)
+
     return (
         <RootDocument>
             <a
@@ -36,32 +45,28 @@ function RootComponent() {
             >
                 Skip to content
             </a>
-            <AppHeader />
-            <MainRegion />
+            {isAuthRoute ? (
+                <>
+                    <AppHeader />
+                    <MainRegion />
+                </>
+            ) : (
+                <AppShell />
+            )}
             <Toaster richColors closeButton />
         </RootDocument>
     )
 }
 
 /**
- * Wraps the routed content in a focusable landmark target. On client-side
- * navigation we move focus here so keyboard / screen-reader users land on the
- * new page's content instead of staying on the link they activated (A11Y
- * Project: manage focus on route change). The "Skip to content" link targets
- * the same id. Focus is never stolen on the initial paint.
+ * Wraps the routed content in a focusable landmark target for the auth/landing
+ * pages (the app shell provides its own). On client-side navigation focus moves
+ * here so keyboard / screen-reader users land on the new page's content instead
+ * of staying on the link they activated (A11Y Project: manage focus on route
+ * change). The "Skip to content" link targets the same id.
  */
 function MainRegion() {
-    const ref = useRef<HTMLDivElement>(null)
-    const pathname = useRouterState({ select: (s) => s.location.pathname })
-    const firstRender = useRef(true)
-
-    useEffect(() => {
-        if (firstRender.current) {
-            firstRender.current = false
-            return
-        }
-        ref.current?.focus()
-    }, [pathname])
+    const ref = useFocusOnNavigate<HTMLDivElement>()
 
     return (
         <div id="main-content" ref={ref} tabIndex={-1} className="outline-none">
