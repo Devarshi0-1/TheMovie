@@ -8,6 +8,7 @@ import { withTimeout } from './lib/withTimeout'
 import { db } from './db'
 import { rateLimit } from './middleware/rateLimit'
 import chatRoute from './routes/chat'
+import jobsRoute from './routes/jobs'
 import moviesRoute from './routes/movies'
 import recommendationsRoute from './routes/recommendations'
 import reviewsRoute from './routes/reviews'
@@ -64,6 +65,8 @@ app.route('/api/v1/chat', chatRoute)
 app.route('/api/v1/watchlist', watchlistRoute)
 app.route('/api/v1/reviews', reviewsRoute)
 app.route('/api/v1/recommendations', recommendationsRoute)
+// Secret-guarded job triggers for an external scheduler (see routes/jobs.ts).
+app.route('/api/v1/jobs', jobsRoute)
 
 // Bound each dependency probe (via the shared `withTimeout`) so an unreachable
 // service reports `down` quickly instead of hanging on a connection attempt.
