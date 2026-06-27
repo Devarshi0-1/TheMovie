@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty'
 import { MovieCardLink } from '../components/MovieCardLink'
+import { POSTER_GRID_CLASS, PosterGridSkeleton } from '../components/PosterGridSkeleton'
 import { requireSession } from '../lib/auth'
 import { useRemoveFromWatchlist, watchlistQueryOptions } from '../lib/watchlist'
 
@@ -24,7 +25,11 @@ function WatchlistScreen() {
             <h1 className="mb-6 text-xl font-semibold tracking-tight">Your watchlist</h1>
 
             {isPending ? (
-                <p className="py-8 text-muted-foreground">Loading your watchlist…</p>
+                <PosterGridSkeleton
+                    withAction
+                    testId="watchlist-loading"
+                    label="Loading your watchlist"
+                />
             ) : isError ? (
                 <Alert variant="destructive">
                     <AlertDescription>
@@ -41,7 +46,7 @@ function WatchlistScreen() {
                     </EmptyHeader>
                 </Empty>
             ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5">
+                <div className={POSTER_GRID_CLASS}>
                     {data.map((entry) => {
                         const movie: MovieResult = {
                             tmdbId: entry.movieId,

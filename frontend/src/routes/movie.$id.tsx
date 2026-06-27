@@ -3,7 +3,7 @@ import { createFileRoute, Link, notFound } from '@tanstack/react-router'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ReviewSummary } from '../components/ReviewSummary'
+import { ReviewSummary, ReviewSummarySkeleton } from '../components/ReviewSummary'
 import { WatchlistButton } from '../components/WatchlistButton'
 import { movieDetailsQueryOptions, movieSummaryQueryOptions, releaseYear } from '../lib/movies'
 import { formatRuntime, TMDB_BACKDROP_BASE, TMDB_POSTER_BASE } from '../lib/tmdb'
@@ -139,7 +139,7 @@ function MovieDetail() {
 
             <div className="relative z-10 mt-12">
                 {summary.isPending ? (
-                    <p className="py-8 text-muted-foreground">Summarizing audience reviews…</p>
+                    <ReviewSummarySkeleton />
                 ) : summary.isError ? (
                     <Alert variant="destructive">
                         <AlertDescription>Couldn’t load the review summary.</AlertDescription>
