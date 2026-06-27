@@ -32,6 +32,15 @@ describe('<ChatComposer />', () => {
         await waitFor(() => expect(onSend).toHaveBeenCalledWith('dune'))
     })
 
+    it('surfaces the keyboard shortcut and ties it to the input', () => {
+        render(<ChatComposer onSend={noop} streaming={false} onStop={noop} />)
+        expect(screen.getByText('Press Enter to send, Shift+Enter for a new line.')).toBeVisible()
+        expect(screen.getByLabelText('Message')).toHaveAttribute(
+            'aria-describedby',
+            'chat-composer-hint',
+        )
+    })
+
     // ── Edge cases ────────────────────────────────────────────────────────
     it('keeps Send disabled while the input is empty', () => {
         render(<ChatComposer onSend={noop} streaming={false} onStop={noop} />)

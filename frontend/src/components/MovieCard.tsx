@@ -17,6 +17,10 @@ export function MovieCard({ movie }: { movie: MovieResult }) {
                         src={`${TMDB_POSTER_BASE}${movie.posterPath}`}
                         alt={`${movie.title} poster`}
                         loading="lazy"
+                        // Intrinsic dimensions (w342 poster is 342×513, 2:3) give the
+                        // browser the aspect ratio up front — no layout shift (web.dev CLS).
+                        width={342}
+                        height={513}
                         className="h-full w-full object-cover"
                     />
                 ) : (
