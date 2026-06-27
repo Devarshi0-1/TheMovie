@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { z } from 'zod'
 import { AuthForm } from '../components/AuthForm'
 import {
@@ -32,6 +33,7 @@ function SignUp() {
         // ran in sign-up mode, so `values` carries `name`; re-validate to narrow.
         await signUp(SignUpSchema.parse(values))
         await queryClient.invalidateQueries({ queryKey: sessionQueryKey })
+        toast.success('Account created')
         void navigate({ to: dest })
     }
 

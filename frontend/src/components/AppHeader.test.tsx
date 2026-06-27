@@ -1,8 +1,18 @@
-import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { sessionQueryKey } from '../lib/auth'
 import { makeTestQueryClient, renderWithProviders } from '../test/providers'
 import { AppHeader } from './AppHeader'
+
+vi.mock('sonner', () => ({
+    toast: { success: vi.fn(), error: vi.fn() },
+}))
+
+afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+})
 
 describe('<AppHeader />', () => {
     // ── Feature / happy path ──────────────────────────────────────────────
@@ -14,6 +24,26 @@ describe('<AppHeader />', () => {
         expect(await screen.findByText('Ana')).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
         expect(screen.queryByText('Sign in')).not.toBeInTheDocument()
+    })
+
+    it('toasts after a successful sign out', async () => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(
+                () =>
+                    new Response(JSON.stringify({ success: true }), {
+                        status: 200,
+                        headers: { 'Content-Type': 'application/json' },
+                    }),
+            ),
+        )
+        const qc = makeTestQueryClient()
+        qc.setQueryData(sessionQueryKey, { id: 'u1', email: 'ana@example.com', name: 'Ana' })
+        renderWithProviders(<AppHeader />, qc)
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }))
+
+        await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Signed out'))
     })
 
     // ── Edge cases ────────────────────────────────────────────────────────
