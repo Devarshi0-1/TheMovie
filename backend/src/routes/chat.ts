@@ -209,9 +209,9 @@ export async function handleChat(
                         deps.store,
                         ctx.userId,
                         conversationId,
-                        responseMessage.id === clientAssistant.id
-                            ? [responseMessage]
-                            : [clientAssistant, responseMessage],
+                        responseMessage.id === clientAssistant.id ?
+                            [responseMessage]
+                        :   [clientAssistant, responseMessage],
                     ),
                 onError: onStreamError,
                 headers: { 'X-Conversation-Id': conversationId },

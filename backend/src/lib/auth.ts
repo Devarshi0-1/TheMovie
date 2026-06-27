@@ -7,9 +7,7 @@ import * as schema from './../db/schema'
 // can't drift). Localhost is only trusted outside production, so the dev ports
 // don't ship as trusted origins to prod.
 const devOrigins =
-    process.env.NODE_ENV === 'production'
-        ? []
-        : ['http://localhost:5173', 'http://localhost:3000']
+    process.env.NODE_ENV === 'production' ? [] : ['http://localhost:5173', 'http://localhost:3000']
 
 export const trustedOrigins = [process.env.FRONTEND_URL, ...devOrigins].filter(
     (origin): origin is string => Boolean(origin),
@@ -36,9 +34,9 @@ export const auth = betterAuth({
             verify: ({ password, hash }) => Bun.password.verify(password, hash),
         },
     },
-    ...(crossSiteCookies
-        ? { advanced: { defaultCookieAttributes: { sameSite: 'none', secure: true } } }
-        : {}),
+    ...(crossSiteCookies ?
+        { advanced: { defaultCookieAttributes: { sameSite: 'none', secure: true } } }
+    :   {}),
     // Origin checks are ON; requests must come from a trusted origin.
     trustedOrigins,
 })

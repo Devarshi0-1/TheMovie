@@ -11,8 +11,8 @@
         "redis-stop": "docker stop my-movie-redis",
         "test": "bun test",
         "lint": "oxlint --type-aware src",
-        "format": "oxfmt src",
-        "format:check": "oxfmt --check src",
+        "format": "prettier --write src",
+        "format:check": "prettier --check src",
         "typecheck": "tsgo --noEmit"
     },
     "dependencies": {
@@ -29,9 +29,9 @@
         "@typescript/native-preview": "^7.0.0-dev.20260627.2",
         "concurrently": "^9.2.1",
         "drizzle-kit": "^0.31.8",
-        "oxfmt": "^0.56.0",
         "oxlint": "^1.71.0",
         "oxlint-tsgolint": "^0.23.0",
+        "prettier": "^3.9.0",
         "typescript": "^5.7.0"
     }
 }
