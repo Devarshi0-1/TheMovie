@@ -1,5 +1,6 @@
 import type { ReviewSummary as ReviewSummaryData } from '@themovie/schemas'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 
 /**
  * Renders the spoiler-free AI summary of a movie's audience reviews
@@ -50,6 +51,45 @@ export function ReviewSummary({ summary }: { summary: ReviewSummaryData }) {
                     )}
                 </div>
             )}
+        </section>
+    )
+}
+
+const PRO_KEYS = ['p0', 'p1']
+const CON_KEYS = ['c0', 'c1']
+
+/**
+ * Loading placeholder for {@link ReviewSummary}, matching its card shape so the
+ * detail page doesn't shift when the AI summary streams in (web.dev CLS). Built
+ * on the shadcn `Skeleton`.
+ */
+export function ReviewSummarySkeleton() {
+    return (
+        <section
+            className="max-w-[720px] rounded-2xl border border-border bg-card p-6"
+            aria-busy="true"
+            aria-label="Summarizing audience reviews"
+        >
+            <div className="mb-3 flex items-center gap-3">
+                <Skeleton className="h-6 w-44" />
+                <Skeleton className="h-5 w-28 rounded-full" />
+            </div>
+            <Skeleton className="mb-2 h-5 w-full" />
+            <Skeleton className="mb-5 h-5 w-2/3" />
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                    <Skeleton className="h-3 w-16" />
+                    {PRO_KEYS.map((key) => (
+                        <Skeleton key={key} className="h-4 w-5/6" />
+                    ))}
+                </div>
+                <div className="flex flex-col gap-2">
+                    <Skeleton className="h-3 w-16" />
+                    {CON_KEYS.map((key) => (
+                        <Skeleton key={key} className="h-4 w-4/6" />
+                    ))}
+                </div>
+            </div>
         </section>
     )
 }

@@ -258,12 +258,15 @@ A pass to hold the frontend to recognized UI/UX best practices. The audit (2026-
 ### Milestone 9.1: Action feedback (toasts)
 * [x] **Toast notifications via Sonner** (shadcn `sonner`, `prefers-color-scheme`-driven — no `next-themes`): `<Toaster richColors closeButton />` mounted in `__root.tsx`; success/error toasts on **watchlist add/remove** (`WatchlistButton` + the `/watchlist` Remove button) and **auth** (sign in / sign up / sign out). Toasts fire at the **call sites**, not inside the shared `useAddToWatchlist`/`useRemoveFromWatchlist` hooks, so the chat HITL batch flow (`WatchlistConfirm`) keeps its own inline outcome instead of firing one toast per movie. Tests assert the success/error `toast` calls (mocked `sonner`).
 
-### Milestone 9.2: Remaining gaps _(unstarted)_
-* [ ] **Destructive-action confirmation** — watchlist Remove is one click with no confirm/undo (`watchlist.tsx`); add an undo affordance (Sonner action toast) or a confirm step.
-* [ ] **Detail-page skeleton** — `movie/$id` only skeletons the review summary; show skeletons for title/genres/overview on initial load too (`movie.$id.tsx`).
-* [ ] **Responsive typography** — headlines scale once (`sm:`); add `lg:`/`xl:` steps for large screens (`index.tsx`, `movie.$id.tsx`).
-* [ ] **Icon-only button audit** — most have `aria-label`/`sr-only`, but verify systematically across all icon buttons (A11Y checklist).
-* [ ] **Keyboard-hint affordance** — surface the chat composer's Enter / Shift+Enter behavior in the UI (title/help text), not just a code comment.
+### Milestone 9.2: Remaining gaps
+
+Planned as five focused PRs, each grounded in a named source (NN/g heuristics, Laws of UX, A11Y Project, web.dev/CLS, the repo's shadcn skill) and built only on vendored shadcn primitives.
+
+* [x] **Skeleton loaders replace plain-text loaders** _(PR 1)_ — the watchlist grid and the movie-detail review summary now render layout-mirroring `Skeleton` placeholders instead of "Loading…" text, via a shared `PosterGridSkeleton` (also used by `MovieGrid`) and `ReviewSummarySkeleton`. Reserves the exact final space so there's no layout shift (web.dev CLS) and the wait feels faster (Doherty Threshold).
+* [ ] **Destructive-action undo** _(PR 2)_ — watchlist Remove is one click with no recovery (`WatchlistButton`, `watchlist.tsx`); switch its toast to the shadcn `sonner` action pattern (`toast(…, { action: { label: 'Undo', onClick } })`) that re-adds via the existing add mutation (NN/g #3 User Control).
+* [ ] **Error recovery (Retry)** _(PR 3)_ — the discovery grid (`MovieGrid`) and watchlist error states show an `Alert` with no retry; add a `Button` wired to TanStack Query `refetch` (NN/g #9).
+* [ ] **Accessibility: live regions + focus** _(PR 4)_ — announce the streaming chat transcript via a polite live region, put loaders in `role="status"`/`output` regions, add a "Skip to content" link + focus-to-main on route change, and a systematic icon-only-button name pass (A11Y Project).
+* [ ] **Responsive + recognition polish** _(PR 5)_ — `lg:`/`xl:` heading steps (`index.tsx`, `movie.$id.tsx`), intrinsic `width`/`height` on poster `<img>` for CLS robustness, and surfacing the chat Enter / Shift+Enter hint in the UI (Refactoring UI, Jakob's Law).
 
 > Every frontend change here ships feature tests + edge-case tests (Vitest) + a UX overview, per `CLAUDE.md`.
 

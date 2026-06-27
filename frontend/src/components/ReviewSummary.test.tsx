@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { ReviewSummary } from './ReviewSummary'
+import { ReviewSummary, ReviewSummarySkeleton } from './ReviewSummary'
 
 describe('<ReviewSummary />', () => {
     // ── Feature / happy path ──────────────────────────────────────────────
@@ -34,5 +34,14 @@ describe('<ReviewSummary />', () => {
         render(<ReviewSummary summary={{ vibe: 'x', pros: ['Great score'], cons: [] }} />)
         expect(screen.getByText('Loved')).toBeInTheDocument()
         expect(screen.queryByText('Critiqued')).not.toBeInTheDocument()
+    })
+
+    it('renders a busy skeleton placeholder while the summary loads', () => {
+        const { container } = render(<ReviewSummarySkeleton />)
+        expect(screen.getByLabelText('Summarizing audience reviews')).toHaveAttribute(
+            'aria-busy',
+            'true',
+        )
+        expect(container.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0)
     })
 })

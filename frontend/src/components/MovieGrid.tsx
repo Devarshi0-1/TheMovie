@@ -1,8 +1,8 @@
 import type { MovieResult } from '@themovie/schemas'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
-import { Skeleton } from '@/components/ui/skeleton'
 import { MovieCardLink } from './MovieCardLink'
+import { POSTER_GRID_CLASS, PosterGridSkeleton } from './PosterGridSkeleton'
 
 interface MovieGridProps {
     movies?: MovieResult[]
@@ -12,24 +12,13 @@ interface MovieGridProps {
     errorLabel?: string
 }
 
-// Fixed (index-free) keys for skeleton placeholders.
-const SKELETON_KEYS = ['sk0', 'sk1', 'sk2', 'sk3', 'sk4', 'sk5', 'sk6', 'sk7', 'sk8', 'sk9']
-
-const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-5'
-
 /**
  * Renders a responsive grid of clickable movie cards, with explicit
  * loading / error / empty states so every screen using it degrades gracefully.
  */
 export function MovieGrid({ movies, isLoading, isError, emptyLabel, errorLabel }: MovieGridProps) {
     if (isLoading) {
-        return (
-            <div className={GRID_CLASS} aria-busy="true" data-testid="movie-grid-loading">
-                {SKELETON_KEYS.map((key) => (
-                    <Skeleton key={key} className="aspect-[2/3] rounded-xl" aria-hidden="true" />
-                ))}
-            </div>
-        )
+        return <PosterGridSkeleton testId="movie-grid-loading" label="Loading movies" />
     }
 
     if (isError) {
@@ -53,7 +42,7 @@ export function MovieGrid({ movies, isLoading, isError, emptyLabel, errorLabel }
     }
 
     return (
-        <div className={GRID_CLASS}>
+        <div className={POSTER_GRID_CLASS}>
             {movies.map((movie) => (
                 <MovieCardLink key={movie.tmdbId} movie={movie} />
             ))}
