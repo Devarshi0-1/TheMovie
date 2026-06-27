@@ -48,7 +48,7 @@ function Discover() {
                 <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
                     TheMovie
                 </p>
-                <h1 className="mb-4 max-w-[18ch] text-4xl font-semibold leading-[1.05] tracking-tight [&_em]:not-italic [&_em]:text-primary sm:text-5xl">
+                <h1 className="mb-4 max-w-[18ch] text-4xl font-semibold leading-[1.05] tracking-tight [&_em]:not-italic [&_em]:text-primary sm:text-5xl lg:text-6xl">
                     Find a film by <em>describing</em> it, not naming it.
                 </h1>
                 <p className="mb-8 max-w-[56ch] text-lg leading-relaxed text-muted-foreground">

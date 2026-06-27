@@ -78,6 +78,8 @@ function MovieDetail() {
                         <img
                             src={`${TMDB_POSTER_BASE}${movie.posterPath}`}
                             alt={`${movie.title} poster`}
+                            width={342}
+                            height={513}
                             className="h-full w-full object-cover"
                         />
                     ) : (
@@ -91,7 +93,7 @@ function MovieDetail() {
                 </div>
 
                 <div>
-                    <h1 className="mb-3 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+                    <h1 className="mb-3 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
                         {movie.title}
                     </h1>
                     <p className="mb-4 flex items-center gap-2.5 text-sm text-muted-foreground">

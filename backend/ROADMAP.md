@@ -266,7 +266,9 @@ Planned as five focused PRs, each grounded in a named source (NN/g heuristics, L
 * [x] **Destructive-action undo** _(PR 2)_ — the watchlist Remove toast (movie page + watchlist screen) now uses the shadcn `sonner` action pattern (`toast(…, { duration: 6000, action: { label: 'Undo', onClick } })`), re-adding via the existing add mutation (NN/g #3 User Control). Chat HITL flow untouched.
 * [x] **Error recovery (Retry)** _(PR 3)_ — the discovery grid (`MovieGrid`, both trending + search) and the watchlist error state now render a `Retry` `Button` in the `Alert`'s `AlertAction` slot, wired to TanStack Query `refetch` (NN/g #9 "recover from errors").
 * [x] **Accessibility: live regions + focus** _(PR 4)_ — the chat transcript is now a polite live region (`role="log"` / `aria-live="polite"`) so streamed replies are announced; a "Skip to content" link + a focusable `#main-content` wrapper move focus to the new page's content on client-side navigation; loaders carry `aria-busy` + an accessible label; icon-only-button audit confirmed clean (only the labeled `SearchBar` clear button; other icons are decorative inside labeled `Badge`/`Spinner`/sonner) (A11Y Project).
-* [ ] **Responsive + recognition polish** _(PR 5)_ — `lg:`/`xl:` heading steps (`index.tsx`, `movie.$id.tsx`), intrinsic `width`/`height` on poster `<img>` for CLS robustness, and surfacing the chat Enter / Shift+Enter hint in the UI (Refactoring UI, Jakob's Law).
+* [x] **Responsive + recognition polish** _(PR 5)_ — `lg:` heading steps on the discovery hero and movie-detail title, intrinsic `width`/`height` (342×513) on poster `<img>` for CLS robustness, and the chat Enter / Shift+Enter shortcut surfaced as a visible hint tied to the textarea via `aria-describedby` (Refactoring UI, NN/g recognition-over-recall).
+
+**Phase 9 complete** — all five PRs merged; the frontend now meets the named UX/accessibility standards across loading, error, empty, destructive-action, and responsive states.
 
 > Every frontend change here ships feature tests + edge-case tests (Vitest) + a UX overview, per `CLAUDE.md`.
 

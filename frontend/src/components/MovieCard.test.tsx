@@ -21,10 +21,13 @@ describe('<MovieCard />', () => {
         expect(screen.getByText('Science Fiction')).toBeInTheDocument()
     })
 
-    it('renders the poster image with descriptive alt text', () => {
+    it('renders the poster image with descriptive alt text and intrinsic dimensions', () => {
         render(<MovieCard movie={movie} />)
         const img = screen.getByRole('img', { name: 'Inception poster' })
         expect(img).toHaveAttribute('src', expect.stringContaining('/poster.jpg'))
+        // Intrinsic width/height reserve the aspect ratio (no layout shift).
+        expect(img).toHaveAttribute('width', '342')
+        expect(img).toHaveAttribute('height', '513')
     })
 
     // ── Edge cases ────────────────────────────────────────────────────────
