@@ -2,7 +2,7 @@ import type { MovieResult, WatchlistEntry } from '@themovie/schemas'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty'
 import { MovieCardLink } from '../components/MovieCardLink'
@@ -17,7 +17,7 @@ export const Route = createFileRoute('/watchlist')({
 })
 
 function WatchlistScreen() {
-    const { data, isPending, isError } = useQuery(watchlistQueryOptions)
+    const { data, isPending, isError, refetch } = useQuery(watchlistQueryOptions)
     const remove = useRemoveFromWatchlist()
     const add = useAddToWatchlist()
 
@@ -60,6 +60,16 @@ function WatchlistScreen() {
                     <AlertDescription>
                         Couldn’t load your watchlist. Please try again.
                     </AlertDescription>
+                    <AlertAction>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void refetch()}
+                        >
+                            Retry
+                        </Button>
+                    </AlertAction>
                 </Alert>
             ) : data.length === 0 ? (
                 <Empty>
