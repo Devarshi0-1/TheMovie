@@ -1,9 +1,11 @@
 import { queryOptions } from '@tanstack/react-query'
 import {
     MovieDetailViewSchema,
+    MovieExtrasSchema,
     MovieResultSchema,
     ReviewSummarySchema,
     type MovieDetailView,
+    type MovieExtras,
     type MovieResult,
     type ReviewSummary,
 } from '@themovie/schemas'
@@ -87,6 +89,20 @@ export function movieDetailsQueryOptions(id: number) {
         queryFn: () => fetchMovieDetails(id),
         // Movie details are effectively immutable; don't refetch on revisit.
         staleTime: Infinity,
+    })
+}
+
+export async function fetchMovieExtras(id: number): Promise<MovieExtras> {
+    return MovieExtrasSchema.parse(await apiFetch(`/api/v1/movies/${id}/extras`))
+}
+
+export function movieExtrasQueryOptions(id: number) {
+    return queryOptions({
+        queryKey: ['movies', 'extras', id] as const,
+        queryFn: () => fetchMovieExtras(id),
+        // Cast/trailer/providers are near-immutable and cached server-side; the
+        // detail page degrades gracefully if they fail, so don't refetch eagerly.
+        staleTime: 60 * 60_000,
     })
 }
 

@@ -7,6 +7,9 @@
 // TMDB image CDN bases (the API returns only the path segment).
 export const TMDB_POSTER_BASE = 'https://image.tmdb.org/t/p/w342'
 export const TMDB_BACKDROP_BASE = 'https://image.tmdb.org/t/p/w1280'
+// Cast headshots (w185 → 185×278, 2:3) and provider logos (w92 → square).
+export const TMDB_PROFILE_BASE = 'https://image.tmdb.org/t/p/w185'
+export const TMDB_LOGO_BASE = 'https://image.tmdb.org/t/p/w92'
 
 /** A human runtime label ("2h 28m"), or null when TMDB has no runtime. */
 export function formatRuntime(minutes: number | null): string | null {

@@ -1,11 +1,17 @@
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { MovieExtras, MovieExtrasSkeleton, MoreLikeThis } from '../components/MovieExtras'
 import { ReviewSummary, ReviewSummarySkeleton } from '../components/ReviewSummary'
 import { WatchlistButton } from '../components/WatchlistButton'
-import { movieDetailsQueryOptions, movieSummaryQueryOptions, releaseYear } from '../lib/movies'
+import {
+    movieDetailsQueryOptions,
+    movieExtrasQueryOptions,
+    movieSummaryQueryOptions,
+    releaseYear,
+} from '../lib/movies'
 import { formatRuntime, TMDB_BACKDROP_BASE, TMDB_POSTER_BASE } from '../lib/tmdb'
 
 function parseId(raw: string): number {
@@ -49,6 +55,7 @@ function MovieDetail() {
     const movieId = Number(id)
     const { data: movie } = useSuspenseQuery(movieDetailsQueryOptions(movieId))
     const summary = useQuery(movieSummaryQueryOptions(movieId))
+    const extras = useQuery(movieExtrasQueryOptions(movieId))
 
     const runtime = formatRuntime(movie.runtime)
     const rating = movie.voteAverage && movie.voteAverage > 0 ? movie.voteAverage.toFixed(1) : null
@@ -140,6 +147,31 @@ function MovieDetail() {
             </div>
 
             <div className="relative z-10 mt-12">
+                {extras.isPending ? (
+                    <MovieExtrasSkeleton />
+                ) : extras.isError ? (
+                    <Alert variant="destructive">
+                        <AlertDescription>
+                            Couldn’t load cast, trailer, and where-to-watch.
+                        </AlertDescription>
+                        <AlertAction>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    void extras.refetch()
+                                }}
+                            >
+                                Retry
+                            </Button>
+                        </AlertAction>
+                    </Alert>
+                ) : (
+                    <MovieExtras extras={extras.data} />
+                )}
+            </div>
+
+            <div className="relative z-10 mt-12">
                 {summary.isPending ? (
                     <ReviewSummarySkeleton />
                 ) : summary.isError ? (
@@ -150,6 +182,12 @@ function MovieDetail() {
                     <ReviewSummary summary={summary.data} />
                 )}
             </div>
+
+            {extras.isSuccess && extras.data.recommendations.length > 0 && (
+                <div className="relative z-10 mt-12">
+                    <MoreLikeThis movies={extras.data.recommendations} />
+                </div>
+            )}
         </main>
     )
 }
