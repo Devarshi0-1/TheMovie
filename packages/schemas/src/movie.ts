@@ -5,7 +5,13 @@ import { z } from 'zod'
 // schema. One definition drives tool input validation (AI SDK), API responses,
 // and (later) the frontend.
 
-/** The compact movie shape the retrieval tools return to the agent. */
+/**
+ * The compact movie shape the retrieval tools return to the agent and that the
+ * list/search endpoints return to the grid. `voteAverage` (TMDB's 0–10 rating)
+ * and `backdropPath` are **optional**: the TMDB list mapper populates them so
+ * cards can show a rating, but the DB-backed agent retrieval paths omit them
+ * (the LLM has no use for a rating, and the rows aren't selected for it).
+ */
 export const MovieResultSchema = z.object({
     tmdbId: z.number().int(),
     title: z.string(),
@@ -13,6 +19,8 @@ export const MovieResultSchema = z.object({
     releaseDate: z.string().nullable(),
     genres: z.array(z.string()),
     posterPath: z.string().nullable(),
+    voteAverage: z.number().nullable().optional(),
+    backdropPath: z.string().nullable().optional(),
 })
 export type MovieResult = z.infer<typeof MovieResultSchema>
 

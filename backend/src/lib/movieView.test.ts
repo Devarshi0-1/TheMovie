@@ -16,6 +16,7 @@ const RAW_LIST_ITEM = {
     overview: 'An insomniac…',
     release_date: '1999-10-15',
     poster_path: '/poster.jpg',
+    backdrop_path: '/backdrop.jpg',
     genre_ids: [18, 53],
     vote_average: 8.4,
 }
@@ -44,6 +45,8 @@ describe('movieView mapping (DL-10: TMDB → shared display schemas)', () => {
             releaseDate: '1999-10-15',
             genres: ['Drama', 'Thriller'],
             posterPath: '/poster.jpg',
+            backdropPath: '/backdrop.jpg',
+            voteAverage: 8.4,
         })
         // The output satisfies the contract the frontend will validate against.
         expect(MovieResultSchema.safeParse(movie).success).toBe(true)
@@ -88,6 +91,8 @@ describe('movieView mapping (DL-10: TMDB → shared display schemas)', () => {
             releaseDate: null,
             genres: [],
             posterPath: null,
+            backdropPath: null,
+            voteAverage: null,
         })
     })
 
