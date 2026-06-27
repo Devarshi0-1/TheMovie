@@ -177,7 +177,7 @@
 - [ ] BST-3 / BSEC-1 — `Bun.password`/Argon2 hashing.
 - [ ] BERR-1 / BRT-1 — central `app.onError` (JSON 500 + logging).
 - [ ] BERR-2 / BAG-2 — stream `onError` on `runAgent`.
-- [ ] BAG-1 — give the intent gate prior-turn context.
+- [x] BAG-1 — intent gate now receives a bounded prior-turn window (`buildGateContext`) so context-dependent follow-ups classify in context (PR `feat/intent-gate-context`).
 
 **Performance / robustness**
 - [ ] BDB-2 — index `session.user_id`, `account.user_id`.

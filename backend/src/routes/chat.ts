@@ -110,8 +110,35 @@ function mergeResolvedToolResults(history: UIMessage[], incoming: UIMessage[]): 
     return history.map((m) => incomingById.get(m.id) ?? m)
 }
 
+// Prior-turn window fed to the intent gate as reference context (BAG-1). Kept
+// small in both count and per-message length so the gate stays a cheap classifier
+// and a stale/long turn can't bloat the prompt.
+const GATE_CONTEXT_MESSAGES = 4
+const GATE_CONTEXT_CHARS_PER_MESSAGE = 240
+
+/**
+ * A compact, role-tagged window of the most recent prior turns, passed to the
+ * intent gate so a context-dependent follow-up ("tell me more about the second
+ * one", "add that to my list") is classified relevant instead of being hard-
+ * blocked as off-topic (BAG-1). Returns undefined when there's no usable text
+ * history, so a first turn behaves exactly as before.
+ */
+export function buildGateContext(history: UIMessage[]): string | undefined {
+    const lines: string[] = []
+    for (const message of history.slice(-GATE_CONTEXT_MESSAGES)) {
+        const text = textOfMessage(message).replace(/\s+/g, ' ').trim()
+        if (!text) continue
+        const clipped =
+            text.length > GATE_CONTEXT_CHARS_PER_MESSAGE ?
+                text.slice(0, GATE_CONTEXT_CHARS_PER_MESSAGE) + '…'
+            :   text
+        lines.push(`${message.role === 'assistant' ? 'assistant' : 'user'}: ${clipped}`)
+    }
+    return lines.length ? lines.join('\n') : undefined
+}
+
 export interface ChatDeps {
-    gate: (query: string) => Promise<GateDecision>
+    gate: (query: string, context?: string) => Promise<GateDecision>
     runAgent: (
         messages: UIMessage[],
         opts?: { userId?: string },
@@ -151,7 +178,8 @@ function persistTurn(
 }
 
 const defaultChatDeps: ChatDeps = {
-    gate: runIntentGate,
+    // Bind the gate to its default classifier deps, exposing only (query, context).
+    gate: (query, context) => runIntentGate(query, undefined, context),
     runAgent,
     store: conversationStore,
     generateId: () => crypto.randomUUID(),
@@ -234,7 +262,7 @@ export async function handleChat(
     )
     const history = (await deps.store.load(ctx.userId, conversationId)) ?? []
 
-    const decision = await deps.gate(query)
+    const decision = await deps.gate(query, buildGateContext(history))
     if (!decision.allowed) {
         const refusal = decision.refusal ?? 'I can only help with movies and watchlists.'
         // Persist the turn so the thread stays coherent on resume.
