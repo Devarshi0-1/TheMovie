@@ -27,12 +27,14 @@ function pageTitle(pathname: string): string {
  * Adapted from the @efferd app-shell-2 block. Auth/landing pages render the
  * plain header instead (see `__root.tsx`).
  *
- * The routed content sits in a focusable `<main id="main-content">` so the skip
- * link and route-change focus management keep working.
+ * The routed content sits in a focusable `<div id="main-content">` so the skip
+ * link and route-change focus management keep working — each route owns its own
+ * `<main>` landmark (mirroring the auth-pages `MainRegion`), so the shell wrapper
+ * must NOT be a second `<main>`.
  */
 export function AppShell() {
     const pathname = useRouterState({ select: (s) => s.location.pathname })
-    const mainRef = useFocusOnNavigate<HTMLElement>()
+    const mainRef = useFocusOnNavigate<HTMLDivElement>()
 
     return (
         <TooltipProvider>
@@ -57,14 +59,14 @@ export function AppShell() {
                         </div>
                     </header>
 
-                    <main
+                    <div
                         id="main-content"
                         ref={mainRef}
                         tabIndex={-1}
                         className="flex-1 outline-none"
                     >
                         <Outlet />
-                    </main>
+                    </div>
                 </SidebarInset>
             </SidebarProvider>
         </TooltipProvider>
