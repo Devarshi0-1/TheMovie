@@ -83,7 +83,14 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
 
     return (
         <div className="flex h-[min(70vh,640px)] flex-col overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+            <div
+                className="flex flex-1 flex-col gap-4 overflow-y-auto p-5"
+                // Streamed replies are appended async, so announce them politely to
+                // screen readers without moving focus (A11Y Project: live regions).
+                role="log"
+                aria-live="polite"
+                aria-label="Conversation"
+            >
                 {messages.length === 0 ? (
                     <Empty>
                         <EmptyHeader>

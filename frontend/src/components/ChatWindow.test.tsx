@@ -65,6 +65,13 @@ describe('<ChatWindow />', () => {
         expect(sendMessage).toHaveBeenCalledWith({ text: 'What should I watch tonight?' })
     })
 
+    it('exposes the transcript as a polite live region for screen readers', () => {
+        vi.mocked(useChat).mockReturnValue(mockChat({ messages: [] }))
+        renderChat()
+        const log = screen.getByRole('log', { name: 'Conversation' })
+        expect(log).toHaveAttribute('aria-live', 'polite')
+    })
+
     it('renders the conversation messages', () => {
         vi.mocked(useChat).mockReturnValue(
             mockChat({
