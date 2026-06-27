@@ -1,15 +1,12 @@
 import { Hono } from 'hono'
-import { auth } from '../lib/auth'
 import { recommendForUser } from '../lib/recommendations'
+import { requireAuth, type AuthVariables } from '../middleware/auth'
 
-const recommendationsRoute = new Hono()
+const recommendationsRoute = new Hono<{ Variables: AuthVariables }>()
 
 // Personalized "because you watched X" recommendations for the current user.
-recommendationsRoute.get('/', async (c) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) return c.json({ error: 'Unauthorized' }, 401)
-
-    return c.json(await recommendForUser(session.user.id))
+recommendationsRoute.get('/', requireAuth, async (c) => {
+    return c.json(await recommendForUser(c.get('userId')))
 })
 
 export default recommendationsRoute

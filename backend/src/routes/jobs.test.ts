@@ -57,11 +57,11 @@ describe('POST /jobs/refresh-summaries', () => {
         expect(triggered()).toBe(0)
     })
 
-    it('is 404 (disabled) when JOB_TRIGGER_SECRET is not configured (edge: off by default)', async () => {
+    it('is a uniform 401 (not 404) when triggers are unconfigured, so it does not leak that the endpoint is off (edge)', async () => {
         delete process.env.JOB_TRIGGER_SECRET
         const { post, triggered } = make()
         const res = await post({ 'X-Job-Secret': SECRET })
-        expect(res.status).toBe(404)
+        expect(res.status).toBe(401)
         expect(triggered()).toBe(0)
     })
 

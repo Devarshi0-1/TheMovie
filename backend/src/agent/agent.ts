@@ -3,6 +3,7 @@ import {
     convertToModelMessages,
     stepCountIs,
     streamText,
+    type LanguageModel,
     type LanguageModelUsage,
     type UIMessage,
 } from 'ai'
@@ -103,7 +104,10 @@ function logChatFinish(
  * the caller streams it to the client via `toUIMessageStreamResponse()`. Assumes
  * the query already passed the intent gate.
  */
-export async function runAgent(messages: UIMessage[], opts: { userId?: string } = {}) {
+export async function runAgent(
+    messages: UIMessage[],
+    opts: { userId?: string; model?: LanguageModel } = {},
+) {
     // Watchlist tools are bound to the user; retrieval tools are stateless.
     const tools =
         opts.userId ? { ...retrievalTools, ...createUserTools(opts.userId) } : retrievalTools
@@ -117,7 +121,9 @@ export async function runAgent(messages: UIMessage[], opts: { userId?: string } 
     })
 
     return streamText({
-        model: openai(AGENT_MODEL),
+        // Injectable so the loop is testable with a mock model (defaults to the
+        // pinned gpt-5-nano).
+        model: opts.model ?? openai(AGENT_MODEL),
         system: SYSTEM_PROMPT,
         messages: modelMessages,
         tools,

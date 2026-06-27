@@ -47,47 +47,56 @@ export const conversationStore: ConversationStore = {
     async save(userId, conversationId, messages) {
         if (messages.length === 0) return
 
-        // Create the conversation if it's new; ignore if it already exists.
-        await db.insert(conversation).values({ id: conversationId, userId }).onConflictDoNothing()
+        // One transaction so the create → ownership re-check → message upsert →
+        // clock bump are atomic: a partial failure or a concurrent second turn
+        // can't leave messages without their parent's updated clock, and an
+        // ownership-check failure rolls back the conversation insert.
+        await db.transaction(async (tx) => {
+            // Create the conversation if it's new; ignore if it already exists.
+            await tx
+                .insert(conversation)
+                .values({ id: conversationId, userId })
+                .onConflictDoNothing()
 
-        // Re-read ownership: never append to another user's conversation.
-        const [owned] = await db
-            .select({ userId: conversation.userId })
-            .from(conversation)
-            .where(eq(conversation.id, conversationId))
-            .limit(1)
-        if (!owned || owned.userId !== userId) {
-            throw new Error('Conversation does not belong to the user')
-        }
+            // Re-read ownership: never append to another user's conversation.
+            const [owned] = await tx
+                .select({ userId: conversation.userId })
+                .from(conversation)
+                .where(eq(conversation.id, conversationId))
+                .limit(1)
+            if (!owned || owned.userId !== userId) {
+                throw new Error('Conversation does not belong to the user')
+            }
 
-        // Upsert on message id: dedupes retries, but also UPDATES `parts` so a
-        // HITL turn first saved with an unresolved (`input-available`) tool call
-        // is healed to the resolved (`output-available`) parts when the client
-        // re-posts after confirming — otherwise a later turn would reload a
-        // dangling tool call and the model request would be rejected.
-        await db
-            .insert(chatMessage)
-            .values(
-                messages.map((m) => ({
-                    id: m.id,
-                    conversationId,
-                    role: m.role,
-                    parts: m.parts,
-                })),
-            )
-            // Scope the heal to THIS conversation: a same-id row in another
-            // conversation is left untouched (defends the global `id` PK against
-            // a cross-conversation `parts` clobber).
-            .onConflictDoUpdate({
-                target: chatMessage.id,
-                set: { parts: sql`excluded.parts` },
-                where: eq(chatMessage.conversationId, conversationId),
-            })
+            // Upsert on message id: dedupes retries, but also UPDATES `parts` so a
+            // HITL turn first saved with an unresolved (`input-available`) tool
+            // call is healed to the resolved (`output-available`) parts when the
+            // client re-posts after confirming — otherwise a later turn would
+            // reload a dangling tool call and the model request would be rejected.
+            await tx
+                .insert(chatMessage)
+                .values(
+                    messages.map((m) => ({
+                        id: m.id,
+                        conversationId,
+                        role: m.role,
+                        parts: m.parts,
+                    })),
+                )
+                // Scope the heal to THIS conversation: a same-id row in another
+                // conversation is left untouched (defends the global `id` PK
+                // against a cross-conversation `parts` clobber).
+                .onConflictDoUpdate({
+                    target: chatMessage.id,
+                    set: { parts: sql`excluded.parts` },
+                    where: eq(chatMessage.conversationId, conversationId),
+                })
 
-        await db
-            .update(conversation)
-            .set({ updatedAt: new Date() })
-            .where(eq(conversation.id, conversationId))
+            await tx
+                .update(conversation)
+                .set({ updatedAt: new Date() })
+                .where(eq(conversation.id, conversationId))
+        })
     },
 
     async ownerOf(conversationId) {

@@ -30,6 +30,13 @@ export const MovieDetailsResultSchema = MovieResultSchema.extend({
 })
 export type MovieDetailsResult = z.infer<typeof MovieDetailsResultSchema>
 
+/**
+ * A movie id from a path param (a string), coerced + validated as a positive
+ * integer. One definition for every `/:id` / `/:movieId` route so the rule isn't
+ * re-hand-rolled per handler.
+ */
+export const MovieIdSchema = z.coerce.number().int().positive()
+
 // ── Tool input schemas ───────────────────────────────────────────────────────
 // Bounded `limit`s cap fan-out/cost; `.default()` lets the agent omit them.
 

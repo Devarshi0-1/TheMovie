@@ -38,15 +38,13 @@ export function createJobsRoute(
 
     // POST /refresh-summaries — kick off a tiered summary refresh. Returns the
     // run stats (200), `skipped` when another run already holds the lock (200),
-    // or 500 on failure. 404 when triggers aren't configured; 401 on a bad secret.
+    // or 500 on failure.
     route.post('/refresh-summaries', async (c) => {
         const secret = process.env.JOB_TRIGGER_SECRET
-        if (!secret) {
-            return c.json({ error: 'Job triggers are not configured' }, 404)
-        }
-
         const provided = presentedSecret((name) => c.req.header(name))
-        if (!provided || !secretMatches(provided, secret)) {
+        // Uniform 401 whether triggers are unconfigured OR the secret is wrong —
+        // the response must not reveal whether the endpoint is enabled. (BSEC-7.)
+        if (!secret || !provided || !secretMatches(provided, secret)) {
             return c.json({ error: 'Unauthorized' }, 401)
         }
 

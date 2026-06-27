@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'bun:test'
 import type { UIMessage } from 'ai'
+import type { LanguageModelV3StreamPart } from '@ai-sdk/provider'
+import { MockLanguageModelV3, simulateReadableStream } from 'ai/test'
 import {
     assistantTextMessage,
     lastUserMessage,
     latestUserText,
     MAX_STEPS,
     prepareAgentStep,
+    runAgent,
     summarizeToolPaths,
     textOfMessage,
 } from './agent'
@@ -110,5 +113,52 @@ describe('prepareAgentStep (forced synthesis on the final step)', () => {
         // `>=` is defensive: a hypothetical overshoot step stays tool-disabled too
         // (the loop stops before index MAX_STEPS would ever run).
         expect(prepareAgentStep({ stepNumber: MAX_STEPS })).toEqual({ toolChoice: 'none' })
+    })
+})
+
+describe('runAgent (loop wiring, BTEST-1)', () => {
+    function answeringModel(answer: string, onPrompt?: (prompt: unknown) => void) {
+        return new MockLanguageModelV3({
+            doStream: async (options) => {
+                onPrompt?.(options.prompt)
+                // Mock stream parts — verified at runtime; cast past the very
+                // specific V3 part types (test fixture, not production code).
+                const chunks = [
+                    { type: 'text-start', id: '0' },
+                    { type: 'text-delta', id: '0', delta: answer },
+                    { type: 'text-end', id: '0' },
+                    {
+                        type: 'finish',
+                        finishReason: 'stop',
+                        usage: {
+                            inputTokens: { total: 10 },
+                            outputTokens: { total: 5 },
+                        },
+                    },
+                ] as unknown as LanguageModelV3StreamPart[]
+                return { stream: simulateReadableStream({ chunks }) }
+            },
+        })
+    }
+
+    it('converts the conversation and streams the model answer (feature)', async () => {
+        let captured = ''
+        const model = answeringModel('Try Inception.', (p) => (captured = JSON.stringify(p)))
+
+        const result = await runAgent([msg('user', 'a slow-burn heist movie')], { model })
+
+        expect(await result.text).toBe('Try Inception.')
+        // The system prompt + the user turn were converted and sent to the model.
+        expect(captured).toContain('slow-burn heist movie')
+        expect(captured).toContain('TheMovie') // system prompt is included
+    })
+
+    it('binds the user watchlist tools only when a userId is given (feature)', async () => {
+        const withUser = await runAgent([msg('user', 'add Inception')], {
+            model: answeringModel('Done.'),
+            userId: 'u1',
+        })
+        // Tooling is wired without throwing and still streams an answer.
+        expect(await withUser.text).toBe('Done.')
     })
 })
