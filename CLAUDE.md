@@ -80,6 +80,18 @@ A merged PR is a save point. Once work is committed, prefer **`/clear` at the mi
 - **Run long-lived processes** (dev server, ingestion jobs) in the background so their output doesn't flood context.
 - **Trust this file — don't re-derive** settled decisions (OpenAI-only, Zod everywhere, three-artifact tests).
 
+## Working pitfalls (learned the hard way)
+
+These are real traps that have cost time on this repo. Read them before they bite again.
+
+- **Check the environment before claiming you can't test something.** The local stack is real: `docker ps` shows `themovie-pg` (:5433) + `my-movie-redis` (:6379); `backend/.env` has the keys; `GET /health` reports DB+Redis. Never assert "no live DB / can't verify" without looking — and you *can* exercise the running app end-to-end (health, the movie API, auth, the chat stream).
+- **A failing test? Suspect the test and its data before the production code.** `chat_message.id` (and other message ids) are **GLOBAL primary keys** — mint unique ids per test (`crypto.randomUUID()`), never hardcode or reuse them across conversations, and clean up rows between runs. Most "the code is broken" moments here turned out to be the test, not the code (e.g. `conversation.save()` was blamed repeatedly and was always correct).
+- **CI runs offline — no DB, no Redis, no secrets.** The default `bun test` MUST pass with zero env. Don't add import-time `throw if !ENV` guards that break test *collection*; gate live-DB tests behind `RUN_DB_INTEGRATION=1` and give CI a placeholder `DATABASE_URL` (see `.github/workflows/ci.yml`). Local-green ≠ CI-green — **check the PR's CI before merging, and never merge over a red/UNSTABLE check.**
+- **Keep diffs focused: format only the files you touched.** The repo has pre-existing oxfmt/prettier drift and CI does **not** run `format:check`, so a full-tree `oxfmt src` / `prettier --write` reformats unrelated files and bloats the PR (and produces CRLF/LF churn on Windows). Revert that drift before committing.
+- **Re-verify "deferred because impossible" notes against installed versions** before repeating them. Blockers evaporate on upgrade (e.g. `@vitejs/plugin-react` v6 *does* export `reactCompilerPreset`; `tsgo` v7 *removed* `baseUrl`). Confirm library APIs against installed types/docs, not memory.
+- **Test runners differ:** backend = `bun test`; **frontend = `bun run test`** (Vitest — `bun test` silently runs the wrong runner). New `@/` path aliases must be mirrored in `vite.config`, `vitest.config`, **and** `tsconfig`.
+- **Ports must agree:** the backend listens on **`:3100`** (`backend/.env` `PORT`), `BETTER_AUTH_URL` must match that same port, and the frontend's `VITE_API_URL` points at it; the dev server is `:5173` (backend `FRONTEND_URL` + CORS). If the app can't reach the API, check these first.
+
 ## The chat agent: query-handling pipeline
 
 Every user query flows through three stages, built with the **Vercel AI SDK** as plain TypeScript control flow + tool calling. Per-user conversation history is persisted in Postgres for multi-turn memory (loaded on each request, appended via `streamText`'s `onFinish`).
