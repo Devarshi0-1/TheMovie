@@ -57,6 +57,20 @@
       "when": 1782572979608,
       "tag": "0007_add_review_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782584278295,
+      "tag": "0008_panoramic_sabretooth",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782587884613,
+      "tag": "0009_curly_betty_ross",
+      "breakpoints": true
     }
   ]
 }

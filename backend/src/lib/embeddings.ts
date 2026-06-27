@@ -185,18 +185,18 @@ export async function embedTexts(
 
     // De-dupe identical texts so we embed (and cache-read) each unique text once.
     const textByHash = new Map<string, string>()
-    for (let i = 0; i < texts.length; i++) textByHash.set(hashes[i], texts[i])
+    texts.forEach((text, i) => textByHash.set(hashes[i]!, text))
     const uniqueHashes = [...textByHash.keys()]
 
     const vectorByHash = new Map<string, number[]>()
     const missingHashes: string[] = []
 
     const cached = await readCachedVectors(uniqueHashes, cache)
-    for (let i = 0; i < uniqueHashes.length; i++) {
+    uniqueHashes.forEach((hash, i) => {
         const vector = cached[i]
-        if (vector) vectorByHash.set(uniqueHashes[i], vector)
-        else missingHashes.push(uniqueHashes[i])
-    }
+        if (vector) vectorByHash.set(hash, vector)
+        else missingHashes.push(hash)
+    })
 
     if (missingHashes.length === 0) {
         // Every unique text was cached — zero embedding spend (the cost win).
@@ -217,15 +217,15 @@ export async function embedTexts(
 
         // Validate dimensions before trusting the vectors (a model/config drift
         // would otherwise corrupt the pgvector column at insert time).
-        for (let i = 0; i < missingHashes.length; i++) {
+        missingHashes.forEach((hash, i) => {
             const vector = embeddings[i]
             if (!vector || vector.length !== EMBEDDING_DIMENSIONS) {
                 throw new Error(
                     `Unexpected embedding dimension ${vector?.length} (expected ${EMBEDDING_DIMENSIONS})`,
                 )
             }
-            vectorByHash.set(missingHashes[i], vector)
-        }
+            vectorByHash.set(hash, vector)
+        })
 
         // Write back best-effort: a cache failure must not discard vectors we
         // already paid OpenAI to compute, so log per-key rather than reject.
@@ -260,6 +260,7 @@ export async function embedText(
     cache?: EmbeddingCache,
 ): Promise<number[]> {
     const [vector] = await embedTexts([text], embedder, cache)
+    if (!vector) throw new Error('Embedding produced no vector')
     return vector
 }
 

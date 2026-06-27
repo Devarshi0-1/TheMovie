@@ -3,6 +3,7 @@ import {
     convertToModelMessages,
     stepCountIs,
     streamText,
+    type LanguageModel,
     type LanguageModelUsage,
     type UIMessage,
 } from 'ai'
@@ -48,7 +49,8 @@ When you have results, reason over them and reply with a short, ranked set of su
 /** The most recent user message in the conversation, if any. */
 export function lastUserMessage(messages: UIMessage[]): UIMessage | undefined {
     for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'user') return messages[i]
+        const message = messages[i]
+        if (message?.role === 'user') return message
     }
     return undefined
 }
@@ -102,7 +104,10 @@ function logChatFinish(
  * the caller streams it to the client via `toUIMessageStreamResponse()`. Assumes
  * the query already passed the intent gate.
  */
-export async function runAgent(messages: UIMessage[], opts: { userId?: string } = {}) {
+export async function runAgent(
+    messages: UIMessage[],
+    opts: { userId?: string; model?: LanguageModel } = {},
+) {
     // Watchlist tools are bound to the user; retrieval tools are stateless.
     const tools =
         opts.userId ? { ...retrievalTools, ...createUserTools(opts.userId) } : retrievalTools
@@ -116,7 +121,9 @@ export async function runAgent(messages: UIMessage[], opts: { userId?: string } 
     })
 
     return streamText({
-        model: openai(AGENT_MODEL),
+        // Injectable so the loop is testable with a mock model (defaults to the
+        // pinned gpt-5-nano).
+        model: opts.model ?? openai(AGENT_MODEL),
         system: SYSTEM_PROMPT,
         messages: modelMessages,
         tools,

@@ -1,17 +1,12 @@
 import { Hono } from 'hono'
-import { auth } from '../lib/auth'
 import { addToWatchlist, getWatchlist, isInWatchlist, removeFromWatchlist } from '../lib/watchlist'
-import { WatchlistAddSchema } from '@themovie/schemas'
+import { MovieIdSchema, WatchlistAddSchema } from '@themovie/schemas'
+import { requireAuth, type AuthVariables } from '../middleware/auth'
 
-const watchlistRoute = new Hono<{ Variables: { userId: string } }>()
+const watchlistRoute = new Hono<{ Variables: AuthVariables }>()
 
-// Every watchlist route is authenticated; stash the user id for the handlers.
-watchlistRoute.use('*', async (c, next) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) return c.json({ error: 'Unauthorized' }, 401)
-    c.set('userId', session.user.id)
-    await next()
-})
+// Every watchlist route is authenticated; the shared guard stashes the user id.
+watchlistRoute.use('*', requireAuth)
 
 // List the current user's watchlist.
 watchlistRoute.get('/', async (c) => {
@@ -32,23 +27,19 @@ watchlistRoute.post('/', async (c) => {
 
 // Remove a movie (idempotent — always 200, `removed` says whether it was there).
 watchlistRoute.delete('/:movieId', async (c) => {
-    const movieId = Number(c.req.param('movieId'))
-    if (!Number.isInteger(movieId) || movieId <= 0) {
-        return c.json({ error: 'A valid movie ID is required' }, 400)
-    }
+    const id = MovieIdSchema.safeParse(c.req.param('movieId'))
+    if (!id.success) return c.json({ error: 'A valid movie ID is required' }, 400)
 
-    const { removed } = await removeFromWatchlist(c.get('userId'), movieId)
-    return c.json({ removed, movieId })
+    const { removed } = await removeFromWatchlist(c.get('userId'), id.data)
+    return c.json({ removed, movieId: id.data })
 })
 
 // O(1) membership check for "is this on my watchlist?".
 watchlistRoute.get('/:movieId/status', async (c) => {
-    const movieId = Number(c.req.param('movieId'))
-    if (!Number.isInteger(movieId) || movieId <= 0) {
-        return c.json({ error: 'A valid movie ID is required' }, 400)
-    }
+    const id = MovieIdSchema.safeParse(c.req.param('movieId'))
+    if (!id.success) return c.json({ error: 'A valid movie ID is required' }, 400)
 
-    return c.json({ inWatchlist: await isInWatchlist(c.get('userId'), movieId) })
+    return c.json({ inWatchlist: await isInWatchlist(c.get('userId'), id.data) })
 })
 
 export default watchlistRoute

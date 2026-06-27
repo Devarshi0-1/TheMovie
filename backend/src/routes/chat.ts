@@ -2,8 +2,8 @@ import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage } 
 import { Hono } from 'hono'
 import { assistantTextMessage, lastUserMessage, runAgent, textOfMessage } from '../agent/agent'
 import { runIntentGate } from '../agent/intent'
-import { auth } from '../lib/auth'
 import { conversationStore, type ConversationStore } from '../lib/conversation'
+import { requireAuth, type AuthVariables } from '../middleware/auth'
 import { ChatRequestSchema } from '@themovie/schemas'
 import type { GateDecision } from '@themovie/schemas'
 
@@ -120,11 +120,34 @@ export interface ChatDeps {
             originalMessages?: UIMessage[]
             generateMessageId?: () => string
             onFinish?: (event: { responseMessage: UIMessage }) => void | Promise<void>
+            onError?: (error: unknown) => string
             headers?: Record<string, string>
         }) => Response
     }>
     store: ConversationStore
     generateId: () => string
+}
+
+const STREAM_ERROR_MESSAGE = 'Something went wrong while answering. Please try again.'
+
+// In-loop tool/model failures reach the stream; log them server-side (otherwise
+// they're masked) and surface a friendly line to the client. (BAG-2/BERR-2.)
+function onStreamError(error: unknown): string {
+    console.error('Agent stream error:', error)
+    return STREAM_ERROR_MESSAGE
+}
+
+// Persist a turn from the stream's onFinish without letting a DB blip throw into
+// the stream lifecycle (which would drop the save silently). (BERR-3.)
+function persistTurn(
+    store: ConversationStore,
+    userId: string,
+    conversationId: string,
+    messages: UIMessage[],
+): Promise<void> {
+    return store.save(userId, conversationId, messages).catch((err) => {
+        console.error('Failed to persist chat turn:', err)
+    })
 }
 
 const defaultChatDeps: ChatDeps = {
@@ -182,13 +205,15 @@ export async function handleChat(
                 // Persist the now-resolved assistant turn (heals the dangling
                 // tool call in storage) plus the new confirmation reply.
                 onFinish: ({ responseMessage }) =>
-                    deps.store.save(
+                    persistTurn(
+                        deps.store,
                         ctx.userId,
                         conversationId,
-                        responseMessage.id === clientAssistant.id
-                            ? [responseMessage]
-                            : [clientAssistant, responseMessage],
+                        responseMessage.id === clientAssistant.id ?
+                            [responseMessage]
+                        :   [clientAssistant, responseMessage],
                     ),
+                onError: onStreamError,
                 headers: { 'X-Conversation-Id': conversationId },
             })
         }
@@ -226,7 +251,8 @@ export async function handleChat(
         generateMessageId: deps.generateId,
         // Persist the new user message + the assistant reply once streaming ends.
         onFinish: ({ responseMessage }) =>
-            deps.store.save(ctx.userId, conversationId, [userMessage, responseMessage]),
+            persistTurn(deps.store, ctx.userId, conversationId, [userMessage, responseMessage]),
+        onError: onStreamError,
         headers: { 'X-Conversation-Id': conversationId },
     })
 }
@@ -245,12 +271,10 @@ export async function loadConversationMessages(
     return (await store.load(userId, conversationId)) ?? []
 }
 
-const chatRoute = new Hono()
+const chatRoute = new Hono<{ Variables: AuthVariables }>()
+chatRoute.use('*', requireAuth)
 
 chatRoute.post('/', async (c) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) return c.json({ error: 'Unauthorized' }, 401)
-
     const body = await c.req.json().catch(() => null)
     const parsed = ChatRequestSchema.safeParse(body)
     if (!parsed.success) {
@@ -258,7 +282,7 @@ chatRoute.post('/', async (c) => {
     }
 
     return handleChat({
-        userId: session.user.id,
+        userId: c.get('userId'),
         conversationId: parsed.data.id,
         messages: parsed.data.messages as UIMessage[],
     })
@@ -266,11 +290,13 @@ chatRoute.post('/', async (c) => {
 
 // Restore a conversation's prior turns so the client can resume across sessions.
 chatRoute.get('/:conversationId', async (c) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-    if (!session) return c.json({ error: 'Unauthorized' }, 401)
-
     const conversationId = c.req.param('conversationId')
-    const messages = await loadConversationMessages(session.user.id, conversationId)
+    // Bounded shape check (ids are client-generated UUIDs); an odd value just
+    // resolves to an empty thread via the ownership-scoped load.
+    if (conversationId.length < 1 || conversationId.length > 100) {
+        return c.json({ id: conversationId, messages: [] })
+    }
+    const messages = await loadConversationMessages(c.get('userId'), conversationId)
     return c.json({ id: conversationId, messages })
 })
 

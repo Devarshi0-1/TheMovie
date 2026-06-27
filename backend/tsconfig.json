@@ -1,13 +1,15 @@
 {
+    "extends": "../tsconfig.base.json",
     "compilerOptions": {
-        "strict": true,
-        "skipLibCheck": true,
         "target": "esnext",
         "module": "esnext",
-        "moduleResolution": "bundler",
-        "esModuleInterop": true,
-        "allowSyntheticDefaultImports": true,
         "jsx": "react-jsx",
-        "jsxImportSource": "hono/jsx"
-    }
+        "jsxImportSource": "hono/jsx",
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "noEmit": true,
+        "types": ["bun"]
+    },
+    "include": ["src"]
 }

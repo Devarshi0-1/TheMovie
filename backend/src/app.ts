@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
-import { auth } from './lib/auth'
+import { auth, trustedOrigins } from './lib/auth'
 import { redis } from './lib/redis'
 import { withTimeout } from './lib/withTimeout'
 import { db } from './db'
@@ -20,9 +20,8 @@ export const app = new Hono()
 app.use('*', secureHeaders())
 
 // CORS restricted to the known frontend origins (never `*` with credentials).
-const allowedOrigins = [process.env.FRONTEND_URL, 'http://localhost:3000'].filter(
-    (o): o is string => Boolean(o),
-)
+// Shares the `trustedOrigins` list with BetterAuth so the two can't drift.
+const allowedOrigins = trustedOrigins
 app.use(
     '/*',
     cors({
@@ -39,7 +38,12 @@ app.use(
 
 // Rate limits (Redis-backed; fail-open). Tighter on the expensive AI chat
 // endpoint and on auth (brute-force) than on general API traffic.
-app.use('/api/auth/*', rateLimit({ prefix: 'auth', limit: 30, windowSeconds: 300 }))
+// Auth is the brute-force surface — fail CLOSED if the limiter store is down,
+// so a Redis outage can't silently disable login throttling.
+app.use(
+    '/api/auth/*',
+    rateLimit({ prefix: 'auth', limit: 30, windowSeconds: 300, failClosed: true }),
+)
 app.use('/api/v1/*', rateLimit({ prefix: 'api', limit: 120, windowSeconds: 60 }))
 app.use('/api/v1/chat/*', rateLimit({ prefix: 'chat', limit: 15, windowSeconds: 60 }))
 
@@ -99,4 +103,15 @@ app.get('/ping', (c) => c.text('pong'))
 
 app.get('/test', (c) => {
     return c.json({ message: 'Hello Hono!' })
+})
+
+// Unknown path → JSON 404 (consistent with the route error envelope), not
+// Hono's bare plaintext default.
+app.notFound((c) => c.json({ error: 'Not Found' }, 404))
+
+// Any unhandled throw → logged once here and returned as a JSON 500, so routes
+// without their own try/catch don't leak Hono's plaintext default.
+app.onError((err, c) => {
+    console.error('Unhandled error:', err)
+    return c.json({ error: 'Internal Server Error' }, 500)
 })

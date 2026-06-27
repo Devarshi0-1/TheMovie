@@ -111,7 +111,7 @@ async function runConcurrently<T>(
         while (true) {
             const i = cursor++
             if (i >= items.length) break
-            await fn(items[i])
+            await fn(items[i]!)
         }
     })
     await Promise.all(workers)

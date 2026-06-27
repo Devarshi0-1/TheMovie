@@ -17,7 +17,7 @@ describe('ChatRequestSchema', () => {
         const parsed = ChatRequestSchema.parse({
             messages: [{ role: 'user', parts: [{ type: 'text', text: 'hi', state: 'done' }] }],
         })
-        expect((parsed.messages[0].parts[0] as { state?: string }).state).toBe('done')
+        expect((parsed.messages[0]!.parts[0] as { state?: string }).state).toBe('done')
     })
 
     it('rejects an empty messages array (edge)', () => {

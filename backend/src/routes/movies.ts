@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { MovieIdSchema } from '@themovie/schemas'
 import { getMovieDetails, getTrendingMovies, searchMovie } from '../lib/tmdb'
 import { summarizeReviews } from '../lib/summary'
 
@@ -46,14 +47,12 @@ moviesRoute.get('/search', async (c) => {
 
 moviesRoute.get('/:id', async (c) => {
     try {
-        const movieId = c.req.param('id')
-
-        // Validate the path param is a positive integer before hitting TMDB.
-        if (!/^\d+$/.test(movieId)) {
+        const id = MovieIdSchema.safeParse(c.req.param('id'))
+        if (!id.success) {
             return c.json({ error: 'A valid movie ID is required' }, 400)
         }
 
-        const movieDetails = await getMovieDetails(movieId)
+        const movieDetails = await getMovieDetails(String(id.data))
 
         if (!movieDetails) return c.json({ error: 'Failed to fetch movie details' }, 500)
 
@@ -67,13 +66,12 @@ moviesRoute.get('/:id', async (c) => {
 // Spoiler-free AI summary of a movie's audience reviews (for the detail screen).
 moviesRoute.get('/:id/summary', async (c) => {
     try {
-        const movieId = Number(c.req.param('id'))
-
-        if (!Number.isInteger(movieId) || movieId <= 0) {
+        const id = MovieIdSchema.safeParse(c.req.param('id'))
+        if (!id.success) {
             return c.json({ error: 'A valid movie ID is required' }, 400)
         }
 
-        const summary = await summarizeReviews(movieId)
+        const summary = await summarizeReviews(id.data)
 
         return c.json(summary)
     } catch (error) {

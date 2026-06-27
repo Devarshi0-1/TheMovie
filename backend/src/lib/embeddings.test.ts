@@ -193,7 +193,7 @@ describe('embedMovie / embedMovies / embedText', () => {
             fakeCache,
         )
         expect(v).toHaveLength(EMBEDDING_DIMENSIONS)
-        expect(embedderCalls[0][0]).toContain('Title: Solaris')
+        expect(embedderCalls[0]![0]).toContain('Title: Solaris')
     })
 
     it('embedMovies returns one vector per movie in order (feature)', async () => {

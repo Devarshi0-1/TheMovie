@@ -70,7 +70,7 @@ describe('summarizeReviews', () => {
 
         // Persisted durably to PG with the reception vector + change-trigger meta.
         expect(calls.saved).toHaveLength(1)
-        const { movieId, record } = calls.saved[0]
+        const { movieId, record } = calls.saved[0]!
         expect(movieId).toBe(42)
         expect(record.summary).toEqual(summary)
         expect(record.embedding).toBe(fakeVector)
@@ -104,7 +104,7 @@ describe('summarizeReviews', () => {
         expect(calls.fetch).toBe(0)
         // Redis re-warmed at the full (not placeholder) TTL.
         expect(cache.get('movie:55:summary')).toBe(JSON.stringify(summary))
-        expect(calls.cacheSet[0].ttl).toBe(60 * 60 * 24 * 7)
+        expect(calls.cacheSet[0]!.ttl).toBe(60 * 60 * 24 * 7)
     })
 
     it('returns a neutral placeholder (short TTL, NOT persisted to PG) when there are no reviews (edge)', async () => {
@@ -121,7 +121,7 @@ describe('summarizeReviews', () => {
         expect(calls.embed).toBe(0) // no reception vector for an empty summary
         expect(calls.saved).toHaveLength(0) // placeholder stays Redis-only
         // Shorter TTL than a real summary so it refreshes sooner.
-        expect(calls.cacheSet[0].ttl).toBeLessThan(60 * 60 * 24 * 7)
+        expect(calls.cacheSet[0]!.ttl).toBeLessThan(60 * 60 * 24 * 7)
     })
 
     it('skips the reception embedding when the summary is empty (edge: cost)', async () => {
@@ -133,7 +133,7 @@ describe('summarizeReviews', () => {
         })
         await summarizeReviews(8, deps)
         expect(calls.embed).toBe(0) // composeSummaryEmbeddingText('') → no embed call
-        expect(calls.saved[0].record.embedding).toBeNull()
+        expect(calls.saved[0]!.record.embedding).toBeNull()
     })
 
     it('still serves the summary when the PG write fails (edge: resilience)', async () => {
@@ -171,6 +171,6 @@ describe('summarizeReviews', () => {
     it('keys the cache by movie id (feature)', async () => {
         const { deps, calls } = fakeDeps()
         await summarizeReviews(99, deps)
-        expect(calls.cacheSet[0].key).toBe('movie:99:summary')
+        expect(calls.cacheSet[0]!.key).toBe('movie:99:summary')
     })
 })

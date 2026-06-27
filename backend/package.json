@@ -10,24 +10,29 @@
         "redis-start": "docker start my-movie-redis",
         "redis-stop": "docker stop my-movie-redis",
         "test": "bun test",
-        "typecheck": "tsc --noEmit"
+        "test:integration": "RUN_DB_INTEGRATION=1 bun test src/lib/conversation.integration.test.ts",
+        "lint": "oxlint --type-aware src",
+        "format": "prettier --write src",
+        "format:check": "prettier --check src",
+        "typecheck": "tsgo --noEmit"
     },
     "dependencies": {
         "@ai-sdk/openai": "^3.0.74",
         "@themovie/schemas": "workspace:*",
         "ai": "^6.0.209",
         "better-auth": "^1.4.9",
-        "dotenv": "^17.2.3",
         "drizzle-orm": "^0.45.1",
         "hono": "^4.11.3",
-        "pg": "^8.16.3",
         "zod": "^4.1.8"
     },
     "devDependencies": {
         "@types/bun": "latest",
-        "@types/pg": "^8.16.0",
+        "@typescript/native-preview": "^7.0.0-dev.20260627.2",
         "concurrently": "^9.2.1",
         "drizzle-kit": "^0.31.8",
+        "oxlint": "^1.71.0",
+        "oxlint-tsgolint": "^0.23.0",
+        "prettier": "^3.9.0",
         "typescript": "^5.7.0"
     }
 }

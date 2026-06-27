@@ -39,17 +39,31 @@ export interface RateLimitOptions {
     windowSeconds: number
     /** Bucket name so different routes count independently (e.g. 'chat'). */
     prefix: string
-    /** Derive the client identity; defaults to the forwarded client IP. */
+    /** Derive the client identity; defaults to the trusted client IP. */
     identify?: (c: Context) => string
     store?: RateLimitStore
+    /**
+     * When the store is unreachable: `false` (default) allows the request (the
+     * general API stays up); `true` rejects with 503 (use for the auth bucket so
+     * brute-force throttling can't be disabled by taking Redis down).
+     */
+    failClosed?: boolean
 }
 
-// Behind a proxy the real client IP is the first entry of X-Forwarded-For.
-// Without it (direct/local), everyone shares the 'anonymous' bucket — safe
-// (over-strict) rather than unbounded.
+// The client IP from X-Forwarded-For. The LEFTMOST entries are client-supplied
+// and trivially spoofable; the entry appended by your nearest trusted proxy is
+// at the RIGHT. `TRUSTED_PROXY_HOPS` (default 1) is how many proxies sit in
+// front — we read that many from the right. No XFF (direct/local) → everyone
+// shares the 'anonymous' bucket (over-strict, never unbounded).
 function defaultIdentify(c: Context): string {
     const forwarded = c.req.header('x-forwarded-for')
-    return forwarded?.split(',')[0]?.trim() || 'anonymous'
+    if (!forwarded) return 'anonymous'
+    const parts = forwarded
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+    const hops = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? '1') || 1)
+    return parts[parts.length - hops] ?? parts[parts.length - 1] ?? 'anonymous'
 }
 
 /**
@@ -64,6 +78,7 @@ export function rateLimit(opts: RateLimitOptions): MiddlewareHandler {
         prefix,
         identify = defaultIdentify,
         store = redisRateLimitStore,
+        failClosed = false,
     } = opts
 
     return async (c, next) => {
@@ -73,6 +88,11 @@ export function rateLimit(opts: RateLimitOptions): MiddlewareHandler {
         try {
             count = await store.hit(key, windowSeconds)
         } catch (err) {
+            if (failClosed) {
+                console.error('⚠️ Rate limiter store unavailable; rejecting (fail-closed):', err)
+                c.header('Retry-After', String(windowSeconds))
+                return c.json({ error: 'Service temporarily unavailable.' }, 503)
+            }
             console.warn('⚠️ Rate limiter store unavailable; allowing request:', err)
             return next()
         }
