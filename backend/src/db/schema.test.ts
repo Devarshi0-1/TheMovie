@@ -25,6 +25,11 @@ describe('movies table schema', () => {
                 'metadata',
                 'embedding',
                 'source_hash',
+                'review_summary',
+                'review_summary_embedding',
+                'review_summary_hash',
+                'review_count_at_summary',
+                'review_summary_at',
                 'created_at',
                 'updated_at',
             ].sort(),
@@ -53,6 +58,28 @@ describe('movies table schema', () => {
         expect(cfg.columns.find((c) => c.name === 'embedding')).toBeDefined()
         const hnsw = cfg.indexes.find((i) => i.config.name === 'movies_embedding_hnsw_idx')
         expect(hnsw).toBeDefined()
+    })
+
+    it('has a SEPARATE reception vector column + its own HNSW index (Phase 8, Option B)', () => {
+        // The audience-reception summary is embedded into its own vector so the
+        // blended search can kNN it independently of the plot vector.
+        expect(cfg.columns.find((c) => c.name === 'review_summary_embedding')).toBeDefined()
+        const hnsw = cfg.indexes.find(
+            (i) => i.config.name === 'movies_review_summary_embedding_hnsw_idx',
+        )
+        expect(hnsw).toBeDefined()
+    })
+
+    it('summary bookkeeping columns are nullable (edge: a movie may have no summary yet)', () => {
+        for (const name of [
+            'review_summary',
+            'review_summary_embedding',
+            'review_summary_hash',
+            'review_count_at_summary',
+            'review_summary_at',
+        ]) {
+            expect(cfg.columns.find((c) => c.name === name)?.notNull).toBe(false)
+        }
     })
 })
 
@@ -93,6 +120,18 @@ describe('movies migration (offline; live apply pending env)', () => {
             .join('\n')
 
         expect(sql).toContain('ADD COLUMN "source_hash" text')
+    })
+
+    it('adds the reception summary columns + second HNSW index (Phase 8, Option B)', () => {
+        const dir = join(import.meta.dir, '..', '..', 'drizzle')
+        const sql = readdirSync(dir)
+            .filter((f) => f.endsWith('.sql'))
+            .map((f) => readFileSync(join(dir, f), 'utf8'))
+            .join('\n')
+
+        expect(sql).toContain('ADD COLUMN "review_summary" jsonb')
+        expect(sql).toContain('ADD COLUMN "review_summary_embedding" vector(1536)')
+        expect(sql).toContain('movies_review_summary_embedding_hnsw_idx')
     })
 
     it('creates conversation + chat_message tables for memory (Phase 4.4)', () => {

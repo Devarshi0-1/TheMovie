@@ -28,8 +28,14 @@ services:
     image: redis:7-alpine
     # Named to match `bun run dev` (which does `docker start my-movie-redis`).
     container_name: my-movie-redis
+    # AOF persistence so cached summaries / embeddings survive a restart — losing
+    # them forces re-summarizing and re-embedding the catalog (the biggest
+    # avoidable AI cost; see CLAUDE.md). The named volume holds the append log.
+    command: redis-server --appendonly yes
     ports:
       - '6379:6379'
+    volumes:
+      - themovie-redisdata:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -38,3 +44,4 @@ services:
 
 volumes:
   themovie-pgdata:
+  themovie-redisdata:

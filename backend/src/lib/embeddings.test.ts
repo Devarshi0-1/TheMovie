@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'bun:test'
 import {
     composeEmbeddingText,
+    composeSummaryEmbeddingText,
     contentHashFor,
     embedMovie,
     embedMovies,
@@ -72,6 +73,27 @@ describe('composeEmbeddingText', () => {
     it('omits empty/missing fields and keeps title only (edge: partial TMDB row)', () => {
         const text = composeEmbeddingText({ title: 'Untitled', overview: '   ', genres: [] })
         expect(text).toBe('Title: Untitled')
+    })
+
+    it('composeSummaryEmbeddingText labels vibe, pros, and cons (feature: reception vector)', () => {
+        const text = composeSummaryEmbeddingText({
+            vibe: 'A tense, well-acted thriller.',
+            pros: ['Strong performances', 'Gripping pacing'],
+            cons: ['Slow middle act'],
+        })
+        expect(text).toContain('Audience consensus: A tense, well-acted thriller.')
+        expect(text).toContain('Audiences praised: Strong performances, Gripping pacing')
+        expect(text).toContain('Audiences criticized: Slow middle act')
+    })
+
+    it('composeSummaryEmbeddingText returns empty string for a literally-empty summary (edge)', () => {
+        expect(composeSummaryEmbeddingText({ vibe: '', pros: [], cons: [] })).toBe('')
+        expect(composeSummaryEmbeddingText({ vibe: '  ', pros: ['  '], cons: [] })).toBe('')
+    })
+
+    it('composeSummaryEmbeddingText keeps whichever fields are present (edge: partial)', () => {
+        const text = composeSummaryEmbeddingText({ vibe: 'Divisive.', pros: [], cons: [] })
+        expect(text).toBe('Audience consensus: Divisive.')
     })
 
     it('de-dupes labels and ignores malformed entries (edge: dirty jsonb)', () => {

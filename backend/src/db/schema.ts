@@ -148,6 +148,22 @@ export const movies = pgTable(
         // pipeline (Phase 3.3) compares this to skip re-embedding/re-writing
         // rows whose source text is unchanged (idempotent upserts).
         sourceHash: text('source_hash'),
+        // ── Audience-reception summary (Phase 8) ─────────────────────────────
+        // PG is the durable source of truth for the AI review summary; Redis is
+        // a hot cache in front of it. `reviewSummary` holds the {vibe,pros,cons}
+        // payload; `reviewSummaryEmbedding` is a SEPARATE vector (Option B) over
+        // that summary text, capturing audience *reception* — a signal the
+        // plot-based `embedding` can't ("audiences found it genuinely scary").
+        reviewSummary: jsonbNative<unknown>('review_summary'),
+        reviewSummaryEmbedding: vector('review_summary_embedding', { dimensions: 1536 }),
+        // SHA-256 of the summarized review text — gates both re-summarizing and
+        // re-embedding (unchanged reviews → no LLM/embedding spend).
+        reviewSummaryHash: text('review_summary_hash'),
+        // TMDB review count at last summary — the refresh job's "did the source
+        // actually change?" trigger (unchanged count → skip regeneration).
+        reviewCountAtSummary: integer('review_count_at_summary'),
+        // When the summary was last (re)generated — the tiered-refresh clock.
+        reviewSummaryAt: timestamp('review_summary_at'),
         createdAt: timestamp('created_at').notNull().defaultNow(),
         updatedAt: timestamp('updated_at')
             .notNull()
@@ -161,6 +177,13 @@ export const movies = pgTable(
         index('movies_genres_gin_idx').using('gin', t.genres),
         // HNSW index for cosine-distance kNN over embeddings (semantic search).
         index('movies_embedding_hnsw_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
+        // Second HNSW index for the reception vector — lets the blended search
+        // (Phase 8) run an index-accelerated kNN over `review_summary_embedding`
+        // independently of the plot vector, then fuse the two rankings.
+        index('movies_review_summary_embedding_hnsw_idx').using(
+            'hnsw',
+            t.reviewSummaryEmbedding.op('vector_cosine_ops'),
+        ),
     ],
 )
 
