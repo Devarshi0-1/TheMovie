@@ -8,6 +8,48 @@
       "when": 1766962100921,
       "tag": "0000_majestic_karma",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1782329535979,
+      "tag": "0001_add_movies",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782330436164,
+      "tag": "0002_add_embedding",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782332918760,
+      "tag": "0003_add_source_hash",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782361092280,
+      "tag": "0004_add_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782366489614,
+      "tag": "0005_add_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782377363467,
+      "tag": "0006_swap_genres_gin_index",
+      "breakpoints": true
     }
   ]
 }

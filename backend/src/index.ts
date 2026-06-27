@@ -1,48 +1,29 @@
-import { Hono } from 'hono'
-import { cors } from 'hono/cors'
-import { auth } from './lib/auth'
-import moviesRoute from './routes/movies'
+import { app } from './app'
 
-const app = new Hono()
-
-app.use(
-    '/*',
-    cors({
-        origin: process.env.FRONTEND_URL!,
-        allowHeaders: ['Content-Type', 'Authorization'],
-        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        exposeHeaders: ['Content-Type'],
-        maxAge: 600,
-        credentials: true,
-    }),
-)
-
-app.on(['POST', 'GET'], '/api/auth/*', (c) => {
-    return auth.handler(c.req.raw)
-})
-
-app.get('/api/me', async (c) => {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers })
-
-    if (!session) {
-        return c.json({ error: 'Unauthorized' }, 401)
+// Resolve the listen port from PORT. Plain `Number(PORT) || 3000` is wrong: it
+// treats the valid `PORT=0` (let the OS assign a free ephemeral port — common in
+// CI/tests) as falsy and silently binds 3000 instead, and it masks a typo'd
+// non-numeric PORT as 3000 too. Default only when PORT is unset/empty; otherwise
+// require a valid integer in range (0 allowed) and fail loudly on garbage.
+export function resolvePort(raw: string | undefined): number {
+    if (raw === undefined || raw.trim() === '') return 3000
+    const n = Number(raw)
+    if (!Number.isInteger(n) || n < 0 || n > 65535) {
+        throw new Error(`Invalid PORT "${raw}": expected an integer in [0, 65535]`)
     }
+    return n
+}
 
-    return c.json({
-        message: 'You are logged in!',
-        user: session.user,
-    })
-})
-
-app.route('/api/v1/movies', moviesRoute)
-
-app.get('/ping', (c) => c.text('pong'))
-
-app.get('/test', (c) => {
-    return c.json({ message: 'Hello Hono!' })
-})
-
+// Server bootstrap. The Hono app lives in ./app so it can be imported by
+// tests without starting a listener.
 export default {
-    port: 3000,
+    // Port is configurable via PORT so the server can run alongside other local
+    // services (and in containers); defaults to 3000.
+    port: resolvePort(process.env.PORT),
+    // Bun.serve idles connections out after 10s by default. The chat agent
+    // streams a reasoning + multi-step tool-calling loop where many seconds
+    // can pass between bytes, so the default tears the SSE stream down mid-answer
+    // and aborts in-flight tool fetches. Raise to Bun's maximum (255s).
+    idleTimeout: 255,
     fetch: app.fetch,
 }

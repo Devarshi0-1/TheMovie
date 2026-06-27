@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { getMovieDetails, getTrendingMovies, searchMovie } from '../lib/tmdb'
+import { summarizeReviews } from '../lib/summary'
 
 const moviesRoute = new Hono()
 
@@ -20,10 +21,14 @@ moviesRoute.get('/trending', async (c) => {
 
 moviesRoute.get('/search', async (c) => {
     try {
-        const query = c.req.query('q')
+        const query = c.req.query('q')?.trim()
 
+        // Validate the search input at the boundary: present and bounded length.
         if (!query) {
-            return c.json({ error: 'Query parameter is required' }, 400)
+            return c.json({ error: 'Query parameter "q" is required' }, 400)
+        }
+        if (query.length > 200) {
+            return c.json({ error: 'Query is too long (max 200 characters)' }, 400)
         }
 
         const searchResults = await searchMovie(query)
@@ -43,7 +48,10 @@ moviesRoute.get('/:id', async (c) => {
     try {
         const movieId = c.req.param('id')
 
-        if (!movieId) return c.json({ error: 'Movie ID is required' }, 400)
+        // Validate the path param is a positive integer before hitting TMDB.
+        if (!/^\d+$/.test(movieId)) {
+            return c.json({ error: 'A valid movie ID is required' }, 400)
+        }
 
         const movieDetails = await getMovieDetails(movieId)
 
@@ -53,6 +61,24 @@ moviesRoute.get('/:id', async (c) => {
     } catch (error) {
         console.error('Error fetching movie details:', error)
         return c.json({ error: 'Failed to fetch movie details' }, 500)
+    }
+})
+
+// Spoiler-free AI summary of a movie's audience reviews (for the detail screen).
+moviesRoute.get('/:id/summary', async (c) => {
+    try {
+        const movieId = Number(c.req.param('id'))
+
+        if (!Number.isInteger(movieId) || movieId <= 0) {
+            return c.json({ error: 'A valid movie ID is required' }, 400)
+        }
+
+        const summary = await summarizeReviews(movieId)
+
+        return c.json(summary)
+    } catch (error) {
+        console.error('Error summarizing reviews:', error)
+        return c.json({ error: 'Failed to summarize reviews' }, 500)
     }
 })
 

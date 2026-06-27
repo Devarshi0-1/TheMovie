@@ -10,9 +10,14 @@ export const auth = betterAuth({
     }),
     emailAndPassword: {
         enabled: true,
-        minPasswordLength: 4,
+        minPasswordLength: 8,
         requireEmailVerification: false,
     },
-    trustedOrigins: [process.env.FRONTEND_URL!, 'http://localhost:3000'],
-    advanced: { disableOriginCheck: true },
+    // Origin checks are ON (the dev-only `disableOriginCheck` escape hatch is
+    // removed for Phase 6 hardening); requests must come from a trusted origin.
+    // Filter falsy so a missing FRONTEND_URL doesn't inject an invalid origin
+    // (BetterAuth rejects an undefined entry).
+    trustedOrigins: [process.env.FRONTEND_URL, 'http://localhost:3000'].filter(
+        (origin): origin is string => Boolean(origin),
+    ),
 })

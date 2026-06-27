@@ -3,20 +3,30 @@
     "scripts": {
         "dev": "concurrently \"bun run redis-start\" \"bun run drizzle-studio\" \"bun run --hot src/index.ts\"",
         "drizzle-studio": "bunx drizzle-kit studio",
+        "db:migrate": "bun run src/db/migrate.ts",
+        "db:generate": "bunx drizzle-kit generate",
+        "ingest": "bun run src/jobs/ingest.ts",
         "redis-start": "docker start my-movie-redis",
-        "redis-stop": "docker stop my-movie-redis"
+        "redis-stop": "docker stop my-movie-redis",
+        "test": "bun test",
+        "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@ai-sdk/openai": "^3.0.74",
+        "@themovie/schemas": "workspace:*",
+        "ai": "^6.0.209",
         "better-auth": "^1.4.9",
         "dotenv": "^17.2.3",
         "drizzle-orm": "^0.45.1",
         "hono": "^4.11.3",
-        "pg": "^8.16.3"
+        "pg": "^8.16.3",
+        "zod": "^4.1.8"
     },
     "devDependencies": {
         "@types/bun": "latest",
         "@types/pg": "^8.16.0",
         "concurrently": "^9.2.1",
-        "drizzle-kit": "^0.31.8"
+        "drizzle-kit": "^0.31.8",
+        "typescript": "^5.7.0"
     }
 }
