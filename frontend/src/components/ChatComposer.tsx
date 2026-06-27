@@ -35,9 +35,13 @@ export function ChatComposer({ onSend, streaming, onStop, disabled }: ChatCompos
                 void form.handleSubmit()
             }}
         >
+            <label htmlFor="chat-composer-input" className="sr-only">
+                Message
+            </label>
             <form.Field name="message">
                 {(field) => (
                     <textarea
+                        id="chat-composer-input"
                         className="composer__input"
                         name="message"
                         rows={2}
@@ -51,7 +55,6 @@ export function ChatComposer({ onSend, streaming, onStop, disabled }: ChatCompos
                             }
                         }}
                         disabled={disabled}
-                        aria-label="Message"
                     />
                 )}
             </form.Field>

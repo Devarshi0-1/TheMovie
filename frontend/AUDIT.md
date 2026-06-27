@@ -6,7 +6,13 @@
 
 **Overall verdict:** Disciplined, above-average frontend. **No HIGH-severity correctness bugs.** Recurring themes: client-only route protection, duplicated query-keys/schemas/cache-logic, unsurfaced mutation errors, a lenient lint floor that can't catch async mistakes, and a styling layer that never adopted the intended Tailwind+shadcn system.
 
-> **Status (PR `fix/frontend-audit-findings`):** all reported findings addressed **except** the Tailwind v4 + shadcn migration (D4 — deferred to its own follow-up PR per decision). Tooling note: D1/tsgo for the `@themovie/schemas` package is deferred to the backend PR (it still typechecks via `tsc`); the shared `tsconfig.base.json` (D3) is created here and adopted by the backend in its PR. A few NITs left intentionally: TS-4 (env split, optional), DL-10 (tmdb mapper share), CC-4/CC-7 (acceptable), XC-5/6 (lower-value test gaps), LT-6 (React Compiler — evaluated, not adopted).
+> **Status (PR `fix/frontend-audit-findings`):** all reported findings addressed **except** the Tailwind v4 + shadcn migration (D4 — its own follow-up PR) and two items below. NITs now done in the second pass: TS-4 (SSR/browser API base split), CC-4 (stabler message-part keys), CC-7 (sr-only composer label), XC-5 (streaming-UI test), XC-6 (busy-state + WatchlistOutcome-branch tests).
+>
+> **Two items remain, with reasons:**
+> - **DL-10** (TMDB mapper dedup) can't be fixed frontend-only — the backend's movie endpoints leak raw TMDB snake_case that the frontend maps; the real fix is making those endpoints return `MovieResult` and deleting the frontend mapper. Folded into the **backend PR**.
+> - **LT-6** (React Compiler) — attempted, but on Vite 8 + `@vitejs/plugin-react` v6 it needs the rolldown `reactCompilerPreset` via `@rolldown/plugin-babel` (0.1.x). That's a bleeding-edge integration deserving its own change with build + SSR verification, not a NIT bundle. Deferred.
+>
+> Tooling note: D1/tsgo for `@themovie/schemas` is deferred to the backend PR (still `tsc`); the shared `tsconfig.base.json` (D3) is created here and adopted by the backend there.
 
 ---
 

@@ -146,6 +146,15 @@ describe('<ChatWindow />', () => {
         expect(fetchConversationMessages).not.toHaveBeenCalled()
     })
 
+    it('shows a Stop control while streaming and calls stop (feature)', () => {
+        const stop = vi.fn()
+        vi.mocked(useChat).mockReturnValue(mockChat({ status: 'streaming', stop }))
+        renderChat()
+        fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+        expect(stop).toHaveBeenCalledOnce()
+        expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument()
+    })
+
     // ── Edge cases ────────────────────────────────────────────────────────
     it('surfaces an error with a retry that regenerates', () => {
         const regenerate = vi.fn()

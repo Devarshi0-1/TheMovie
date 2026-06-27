@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeTestQueryClient } from '../test/providers'
 import type { ManageWatchlistOutput } from '../lib/chat'
-import { WatchlistConfirm } from './WatchlistConfirm'
+import { WatchlistConfirm, WatchlistOutcome } from './WatchlistConfirm'
 
 // The confirm UI drives the watchlist mutation hooks, so it needs a QueryClient.
 function renderConfirm(input: unknown, onResolve: (o: ManageWatchlistOutput) => void) {
@@ -159,5 +159,54 @@ describe('<WatchlistConfirm />', () => {
         renderConfirm({ action: 'frobnicate' }, onResolve)
         expect(screen.getByRole('alert')).toHaveTextContent('invalid watchlist change')
         expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    })
+
+    it('shows an "Applying…" busy state while a mutation is in flight (edge)', async () => {
+        // A fetch that resolves only when we say so keeps the in-flight state up.
+        let release!: (r: Response) => void
+        mockFetch(() => new Promise<Response>((r) => (release = r)))
+        const onResolve = vi.fn()
+        renderConfirm(addInput, onResolve)
+
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, add it' }))
+        const applying = await screen.findByRole('button', { name: 'Applying…' })
+        expect(applying).toBeDisabled()
+
+        release(jsonResponse({ added: true, movieId: 27205 }, 201))
+        await waitFor(() => expect(onResolve).toHaveBeenCalled())
+    })
+})
+
+describe('<WatchlistOutcome />', () => {
+    it('renders nothing for a missing/invalid output (edge)', () => {
+        const { container } = render(<WatchlistOutcome output={null} />)
+        expect(container).toBeEmptyDOMElement()
+    })
+
+    it('renders the declined, removed, and partial branches (feature/edge)', () => {
+        const { rerender } = render(
+            <WatchlistOutcome output={{ status: 'declined', movies: [] }} />,
+        )
+        expect(screen.getByText(/declined the change/)).toBeInTheDocument()
+
+        rerender(
+            <WatchlistOutcome
+                output={{ status: 'removed', movies: [{ movieId: 1, title: 'Se7en' }] }}
+            />,
+        )
+        expect(screen.getByText(/Removed Se7en from your watchlist/)).toBeInTheDocument()
+
+        rerender(
+            <WatchlistOutcome
+                output={{
+                    status: 'partial',
+                    action: 'add',
+                    movies: [{ movieId: 2, title: 'Dune' }],
+                    failed: [{ movieId: 3, title: 'Tenet' }],
+                }}
+            />,
+        )
+        expect(screen.getByText(/Added Dune/)).toBeInTheDocument()
+        expect(screen.getByText(/Tenet/)).toBeInTheDocument()
     })
 })

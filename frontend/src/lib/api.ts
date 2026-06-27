@@ -18,8 +18,17 @@ import { z } from 'zod'
 // the backend must then issue `SameSite=None; Secure` cookies. Keep them on one
 // site (or a same-origin proxy) unless that backend change is made.
 
-const envBase: string | undefined = import.meta.env.VITE_API_URL
-export const API_BASE = (envBase ?? 'http://localhost:3100').replace(/\/+$/, '')
+// The browser always uses the public `VITE_API_URL`. During SSR the request can
+// optionally be routed over a private network via `API_INTERNAL_URL` (a
+// server-only env var), falling back to the public base when unset — so a prod
+// deploy where the SSR server reaches the backend on a different host is just an
+// env change, not a code change.
+const publicBase: string = import.meta.env.VITE_API_URL ?? 'http://localhost:3100'
+const serverBase =
+    typeof window === 'undefined' && typeof process !== 'undefined'
+        ? process.env.API_INTERNAL_URL
+        : undefined
+export const API_BASE = (serverBase ?? publicBase).replace(/\/+$/, '')
 
 /** A typed failure from the API: carries the HTTP status and any Zod issues. */
 export class ApiError extends Error {
