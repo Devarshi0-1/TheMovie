@@ -9,6 +9,7 @@ import {
     MAX_STEPS,
     prepareAgentStep,
     runAgent,
+    sumStepUsage,
     summarizeToolPaths,
     textOfMessage,
 } from './agent'
@@ -94,6 +95,24 @@ describe('summarizeToolPaths', () => {
 
     it('returns [] when no tools were called (edge: answered directly)', () => {
         expect(summarizeToolPaths([{ toolCalls: [] }, {}])).toEqual([])
+    })
+})
+
+describe('sumStepUsage (abort usage aggregation, BAG-5)', () => {
+    it('sums per-step usage across completed steps (feature)', () => {
+        const total = sumStepUsage([
+            { usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 } },
+            { usage: { inputTokens: 7, outputTokens: 3, totalTokens: 10 } },
+        ])
+        expect(total).toEqual({ inputTokens: 17, outputTokens: 7, totalTokens: 24 })
+    })
+
+    it('treats missing per-step usage as zero (edge: aborted before any step finished)', () => {
+        expect(sumStepUsage([{}, { usage: undefined }])).toEqual({
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+        })
     })
 })
 

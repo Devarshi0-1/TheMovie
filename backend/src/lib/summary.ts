@@ -34,8 +34,9 @@ const EMPTY_SUMMARY: ReviewSummary = {
     cons: [],
 }
 
-// Stable system prompt kept first so OpenAI prompt caching applies; only the
-// per-movie review text (appended after) is volatile.
+// Stable system prompt kept first, per-movie review text appended after — the
+// right ordering for OpenAI prompt caching, though this prompt sits below the
+// ~1024-token cache floor, so caching seldom engages in practice.
 const SYSTEM_PROMPT = `You summarize audience movie reviews into a concise, SPOILER-FREE overview. Rules:
 - Never reveal plot twists, endings, deaths, or surprises — keep it spoiler-free.
 - Base everything ONLY on the provided reviews; do not invent praise or criticism.

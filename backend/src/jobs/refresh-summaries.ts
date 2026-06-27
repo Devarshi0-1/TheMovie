@@ -1,4 +1,4 @@
-import { eq, isNull, lt, or } from 'drizzle-orm'
+import { eq, isNull, lt, or, sql } from 'drizzle-orm'
 import { db } from '../db'
 import { movies } from '../db/schema'
 import { getMovieReviewMeta } from '../lib/tmdb'
@@ -20,6 +20,12 @@ export type Tier = 'hot' | 'warm' | 'cold'
 const DAY_MS = 86_400_000
 // Re-check cadence by release-date age.
 const TIER_INTERVAL_DAYS: Record<Tier, number> = { hot: 2, warm: 7, cold: 30 }
+// Hard cap on candidates pulled per run (BDB-3 / BJOB-1). Bounds memory and, more
+// importantly, smooths the first-deploy cost spike: on a fresh catalog every row
+// has `reviewSummaryAt = NULL` and would otherwise be fetched + re-summarized in
+// a single run. Ordering oldest-first (NULLs first) means each run drains the
+// most-overdue slice and the backlog clears across successive runs.
+export const MAX_CANDIDATES_PER_RUN = 250
 // Release-age tier boundaries (days).
 const HOT_MAX_AGE_DAYS = 90
 const WARM_MAX_AGE_DAYS = 365
@@ -73,15 +79,21 @@ export function refreshDeps(): RefreshDeps {
             // tier in JS. This bounds the working set without duplicating the
             // tier maths in SQL.
             const cutoff = new Date(now.getTime() - TIER_INTERVAL_DAYS.hot * DAY_MS)
-            return db
-                .select({
-                    tmdbId: movies.tmdbId,
-                    releaseDate: movies.releaseDate,
-                    reviewSummaryAt: movies.reviewSummaryAt,
-                    reviewCountAtSummary: movies.reviewCountAtSummary,
-                })
-                .from(movies)
-                .where(or(isNull(movies.reviewSummaryAt), lt(movies.reviewSummaryAt, cutoff)))
+            return (
+                db
+                    .select({
+                        tmdbId: movies.tmdbId,
+                        releaseDate: movies.releaseDate,
+                        reviewSummaryAt: movies.reviewSummaryAt,
+                        reviewCountAtSummary: movies.reviewCountAtSummary,
+                    })
+                    .from(movies)
+                    .where(or(isNull(movies.reviewSummaryAt), lt(movies.reviewSummaryAt, cutoff)))
+                    // Oldest-first (never-summarized rows first); the
+                    // `review_summary_at` btree index (BDB-3) serves this ordering.
+                    .orderBy(sql`${movies.reviewSummaryAt} asc nulls first`)
+                    .limit(MAX_CANDIDATES_PER_RUN)
+            )
         },
         fetchReviewMeta: getMovieReviewMeta,
         async regenerate(movieId, reviews, totalResults) {
