@@ -17,7 +17,7 @@
 > - **Tests:** agent-loop wiring via a mock model (BTEST-1); **BTEST-2** — a `RUN_DB_INTEGRATION`-gated integration test for the REAL `ConversationStore` (cross-user guard, transactional rollback, ordered load, HITL parts-heal) against the live DB, run via `bun run test:integration`; the default `bun test` stays offline (skips it).
 >
 > **Deferred, with reasons:**
-> - **DL-10** (movie endpoints return `MovieResult`): coordinated backend+frontend contract change (the frontend mapper + its tests must go too) — risky to bundle here; its own follow-up.
+> - ~~**DL-10** (movie endpoints return `MovieResult`): coordinated backend+frontend contract change~~ — **done** in PR `feat/movie-endpoints-movieresult`: the movie endpoints now map TMDB → shared `MovieResult` / `MovieDetailView` server-side (`lib/movieView`), and the frontend mapper was deleted (it now just validates the camelCase responses).
 > - **BAG-1** (intent-gate context): genuine UX improvement but needs a careful gate-prompt change + new tests — deferred to keep this PR bounded.
 > - Minor NITs (BAG-3/5, BJOB-1/2, BDB-6/7/8): low-value, left as noted.
 

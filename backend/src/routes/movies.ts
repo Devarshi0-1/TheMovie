@@ -1,7 +1,13 @@
 import { Hono } from 'hono'
 import { MovieIdSchema } from '@themovie/schemas'
 import { getMovieDetails, getTrendingMovies, searchMovie } from '../lib/tmdb'
+import { toMovieDetailView, toMovieResults } from '../lib/movieView'
 import { summarizeReviews } from '../lib/summary'
+
+// These endpoints proxy TMDB but speak the shared camelCase contract — the
+// frontend receives `MovieResult` / `MovieDetailView` and never sees TMDB's raw
+// snake_case (DL-10). Mapping happens here via `movieView`, the single place the
+// TMDB → display translation lives.
 
 const moviesRoute = new Hono()
 
@@ -13,7 +19,7 @@ moviesRoute.get('/trending', async (c) => {
             return c.json({ error: 'Failed to fetch trending movies' }, 500)
         }
 
-        return c.json(trendingMovies)
+        return c.json(toMovieResults(trendingMovies))
     } catch (error) {
         console.error('Error fetching trending movies:', error)
         return c.json({ error: 'Failed to fetch trending movies' }, 500)
@@ -38,7 +44,7 @@ moviesRoute.get('/search', async (c) => {
             return c.json({ error: 'Failed to fetch search results' }, 500)
         }
 
-        return c.json(searchResults)
+        return c.json(toMovieResults(searchResults))
     } catch (error) {
         console.error('Error searching movies:', error)
         return c.json({ error: 'Failed to fetch search results' }, 500)
@@ -56,7 +62,7 @@ moviesRoute.get('/:id', async (c) => {
 
         if (!movieDetails) return c.json({ error: 'Failed to fetch movie details' }, 500)
 
-        return c.json(movieDetails)
+        return c.json(toMovieDetailView(movieDetails, id.data))
     } catch (error) {
         console.error('Error fetching movie details:', error)
         return c.json({ error: 'Failed to fetch movie details' }, 500)

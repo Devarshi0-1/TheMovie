@@ -31,6 +31,18 @@ export const MovieDetailsResultSchema = MovieResultSchema.extend({
 export type MovieDetailsResult = z.infer<typeof MovieDetailsResultSchema>
 
 /**
+ * The detail-screen view model: movie details plus a backdrop for the hero
+ * image. This is the response shape of `GET /api/v1/movies/:id` — the backend
+ * maps TMDB's raw payload onto it so the frontend never sees snake_case. (The
+ * agent's `get_movie_details` tool stays on `MovieDetailsResult`, which has no
+ * use for a backdrop.)
+ */
+export const MovieDetailViewSchema = MovieDetailsResultSchema.extend({
+    backdropPath: z.string().nullable(),
+})
+export type MovieDetailView = z.infer<typeof MovieDetailViewSchema>
+
+/**
  * A movie id from a path param (a string), coerced + validated as a positive
  * integer. One definition for every `/:id` / `/:movieId` route so the rule isn't
  * re-hand-rolled per handler.

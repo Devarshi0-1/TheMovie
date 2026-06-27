@@ -14,15 +14,17 @@ function jsonResponse(body: unknown, status = 200) {
     })
 }
 
-const RAW_LIST = [
+// The movie endpoints now return the shared camelCase shapes (the backend maps
+// TMDB → MovieResult / MovieDetailView), so these fixtures mirror the server
+// contract and the queries validate rather than map.
+const DISPLAY_LIST = [
     {
-        id: 550,
+        tmdbId: 550,
         title: 'Fight Club',
         overview: 'x',
-        release_date: '1999-10-15',
-        poster_path: '/p.jpg',
-        genre_ids: [18],
-        vote_average: 8.4,
+        releaseDate: '1999-10-15',
+        genres: ['Drama'],
+        posterPath: '/p.jpg',
     },
 ]
 
@@ -32,31 +34,45 @@ afterEach(() => {
 
 describe('live movie queries', () => {
     // ── Feature / happy path ──────────────────────────────────────────────
-    it('fetchTrending maps raw TMDB items to display movies', async () => {
-        mockFetch(() => jsonResponse(RAW_LIST))
+    it('fetchTrending validates display movies from the server', async () => {
+        mockFetch(() => jsonResponse(DISPLAY_LIST))
         const movies = await fetchTrending()
         expect(movies[0]).toMatchObject({ tmdbId: 550, title: 'Fight Club', genres: ['Drama'] })
     })
 
     it('searchMovies URL-encodes the query', async () => {
-        const spy = mockFetch(() => jsonResponse(RAW_LIST))
+        const spy = mockFetch(() => jsonResponse(DISPLAY_LIST))
         await searchMovies('the matrix & more')
         expect(spy.mock.calls[0]![0]).toContain('q=the%20matrix%20%26%20more')
     })
 
-    it('fetchMovieDetails maps the detail payload', async () => {
+    it('fetchMovieDetails validates the detail view payload', async () => {
         mockFetch(() =>
             jsonResponse({
-                id: 550,
+                tmdbId: 550,
                 title: 'Fight Club',
-                genres: [{ id: 18, name: 'Drama' }],
-                runtime: 139,
+                overview: null,
+                releaseDate: null,
+                genres: ['Drama'],
+                posterPath: null,
+                backdropPath: '/b.jpg',
                 tagline: 'Soap.',
-                vote_average: 8.4,
+                runtime: 139,
+                voteAverage: 8.4,
             }),
         )
         const details = await fetchMovieDetails(550)
-        expect(details).toMatchObject({ tmdbId: 550, runtime: 139, genres: ['Drama'] })
+        expect(details).toMatchObject({
+            tmdbId: 550,
+            runtime: 139,
+            genres: ['Drama'],
+            backdropPath: '/b.jpg',
+        })
+    })
+
+    it('throws when a movie payload is missing required fields (edge: boundary validation)', async () => {
+        mockFetch(() => jsonResponse([{ title: 'no id' }]))
+        await expect(fetchTrending()).rejects.toThrow()
     })
 
     it('fetchMovieSummary validates the spoiler-free summary shape', async () => {
