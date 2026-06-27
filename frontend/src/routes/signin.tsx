@@ -1,12 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { useEffect } from 'react'
 import { z } from 'zod'
 import { AuthForm } from '../components/AuthForm'
 import {
+    redirectIfAuthenticated,
     sessionQueryKey,
     signIn,
-    useSession,
     type SignInValues,
     type SignUpValues,
 } from '../lib/auth'
@@ -16,6 +15,9 @@ const searchSchema = z.object({ redirect: z.string().optional() })
 
 export const Route = createFileRoute('/signin')({
     validateSearch: searchSchema,
+    // Already signed in → don't sit on the auth screen (bounce before render).
+    beforeLoad: ({ context, search }) =>
+        redirectIfAuthenticated(context.queryClient, safeRedirect(search.redirect)),
     component: SignIn,
 })
 
@@ -24,15 +26,10 @@ function SignIn() {
     const dest = safeRedirect(redirect)
     const navigate = useNavigate()
     const queryClient = useQueryClient()
-    const { data: user } = useSession()
-
-    // Already signed in → don't sit on the auth screen.
-    useEffect(() => {
-        if (user) void navigate({ to: dest })
-    }, [user, dest, navigate])
 
     async function handleSubmit(values: SignInValues | SignUpValues) {
-        await signIn(values as SignInValues)
+        // Both modes carry email + password; sign-in needs only those.
+        await signIn({ email: values.email, password: values.password })
         await queryClient.invalidateQueries({ queryKey: sessionQueryKey })
         void navigate({ to: dest })
     }

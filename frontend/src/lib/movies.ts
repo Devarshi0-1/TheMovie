@@ -84,6 +84,8 @@ export function movieDetailsQueryOptions(id: number) {
     return queryOptions({
         queryKey: ['movies', 'details', id] as const,
         queryFn: () => fetchMovieDetails(id),
+        // Movie details are effectively immutable; don't refetch on revisit.
+        staleTime: Infinity,
     })
 }
 

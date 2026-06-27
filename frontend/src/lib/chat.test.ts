@@ -89,4 +89,15 @@ describe('fetchConversationMessages', () => {
         })) as unknown as typeof fetch
         expect(await fetchConversationMessages('conv-1')).toEqual([])
     })
+
+    it('throws on a malformed restore envelope (edge)', async () => {
+        // A turn missing `role`/`parts` fails validation rather than flowing into
+        // the chat state — the caller degrades to an empty thread.
+        globalThis.fetch = (async () => ({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ id: 'conv-1', messages: [{ id: 'x' }] }),
+        })) as unknown as typeof fetch
+        await expect(fetchConversationMessages('conv-1')).rejects.toThrow()
+    })
 })

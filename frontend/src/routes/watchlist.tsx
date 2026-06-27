@@ -2,20 +2,14 @@ import type { MovieResult } from '@themovie/schemas'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { MovieCardLink } from '../components/MovieCardLink'
-import { RequireAuth } from '../components/RequireAuth'
+import { requireSession } from '../lib/auth'
 import { useRemoveFromWatchlist, watchlistQueryOptions } from '../lib/watchlist'
 
 export const Route = createFileRoute('/watchlist')({
-    component: WatchlistRoute,
+    // Auth-gated; guard before render so signed-out users never see the shell.
+    beforeLoad: ({ context, location }) => requireSession(context.queryClient, location.href),
+    component: WatchlistScreen,
 })
-
-function WatchlistRoute() {
-    return (
-        <RequireAuth redirect="/watchlist">
-            <WatchlistScreen />
-        </RequireAuth>
-    )
-}
 
 function WatchlistScreen() {
     const { data, isPending, isError } = useQuery(watchlistQueryOptions)

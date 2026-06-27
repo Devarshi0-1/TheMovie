@@ -5,7 +5,12 @@ import { MovieCard } from './MovieCard'
 /** A `MovieCard` that navigates to the movie's detail route when clicked. */
 export function MovieCardLink({ movie }: { movie: MovieResult }) {
     return (
-        <Link to="/movie/$id" params={{ id: String(movie.tmdbId) }} className="movie-card-link">
+        <Link
+            to="/movie/$id"
+            params={{ id: String(movie.tmdbId) }}
+            className="movie-card-link"
+            aria-label={movie.title}
+        >
             <MovieCard movie={movie} />
         </Link>
     )

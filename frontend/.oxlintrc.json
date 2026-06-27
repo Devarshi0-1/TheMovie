@@ -7,12 +7,20 @@
     },
     "categories": {
         "correctness": "error",
-        "suspicious": "warn"
+        "suspicious": "error",
+        "perf": "warn"
     },
     "rules": {
         "react/react-in-jsx-scope": "off",
         "react/no-unknown-property": "error",
-        "import/no-unassigned-import": "off"
+        "react/exhaustive-deps": "error",
+        "import/no-unassigned-import": "off",
+        "typescript/no-floating-promises": "error",
+        "typescript/no-misused-promises": "error",
+        "typescript/await-thenable": "error",
+        "typescript/no-unsafe-type-assertion": "off",
+        "typescript/no-unnecessary-type-conversion": "off",
+        "typescript/consistent-return": "off"
     },
     "ignorePatterns": ["src/routeTree.gen.ts", "dist", ".output", ".nitro", "coverage"]
 }

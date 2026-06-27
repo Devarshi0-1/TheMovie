@@ -1,5 +1,11 @@
-import { queryOptions, useQuery } from '@tanstack/react-query'
-import { z } from 'zod'
+import { type QueryClient, queryOptions, useQuery } from '@tanstack/react-query'
+import { redirect } from '@tanstack/react-router'
+import {
+    GetSessionResponseSchema,
+    type SessionUser,
+    type SignInValues,
+    type SignUpValues,
+} from '@themovie/schemas'
 import { ApiError, apiFetch, apiPost } from './api'
 
 // Auth talks to BetterAuth's email/password endpoints (mounted at
@@ -10,17 +16,16 @@ import { ApiError, apiFetch, apiPost } from './api'
 // origin, so the SSR server can't read it). The whole app reads it through the
 // `['session']` TanStack Query below — sign-in / sign-up / sign-out invalidate
 // that key to refresh the nav and route guards.
-
-export const SessionUserSchema = z.object({
-    id: z.string(),
-    email: z.string(),
-    name: z.string().nullish(),
-})
-export type SessionUser = z.infer<typeof SessionUserSchema>
-
-// BetterAuth's get-session returns `{ session, user }` when authed and `null`
-// (HTTP 200) when not.
-const GetSessionResponseSchema = z.object({ user: SessionUserSchema.nullish() }).nullable()
+//
+// The session/credential schemas are defined once in `@themovie/schemas` and
+// re-exported here so consumers (forms, routes) keep importing from `lib/auth`.
+export {
+    SignInSchema,
+    SignUpSchema,
+    type SessionUser,
+    type SignInValues,
+    type SignUpValues,
+} from '@themovie/schemas'
 
 /** Resolve the current user, or `null` when signed out. Never throws on 401. */
 export async function getSession(): Promise<SessionUser | null> {
@@ -52,22 +57,30 @@ export function useSession() {
     return useQuery(sessionQueryOptions)
 }
 
-// ── Form schemas ──────────────────────────────────────────────────────────
-// Client-side validation only; BetterAuth re-validates server-side. Password
-// minimum mirrors the backend's `minPasswordLength: 8`.
+// ── Route guards (beforeLoad) ────────────────────────────────────────────────
+// Router-native guards replace the old effect-based <RequireAuth>: they run
+// before the route's loader/component, so there's no flash of protected content
+// and the redirect is cache-first. The session cookie is unreadable during SSR
+// (it lives on the backend origin), so enforcement happens on the CLIENT only —
+// the server renders the shell and the client beforeLoad resolves the session
+// (from cache when warm) and redirects if needed.
 
-export const SignInSchema = z.object({
-    email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
-    password: z.string().min(1, 'Password is required'),
-})
-export type SignInValues = z.infer<typeof SignInSchema>
+/** Guard a protected route: redirect signed-out users to /signin (client-side). */
+export async function requireSession(queryClient: QueryClient, href: string): Promise<void> {
+    if (typeof window === 'undefined') return
+    const user = await queryClient.ensureQueryData(sessionQueryOptions)
+    if (!user) throw redirect({ to: '/signin', search: { redirect: href } })
+}
 
-export const SignUpSchema = z.object({
-    name: z.string().min(1, 'Name is required'),
-    email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-})
-export type SignUpValues = z.infer<typeof SignUpSchema>
+/** Guard an auth screen: bounce already-signed-in users to `dest` (client-side). */
+export async function redirectIfAuthenticated(
+    queryClient: QueryClient,
+    dest: string,
+): Promise<void> {
+    if (typeof window === 'undefined') return
+    const user = await queryClient.ensureQueryData(sessionQueryOptions)
+    if (user) throw redirect({ to: dest })
+}
 
 // ── Mutations ───────────────────────────────────────────────────────────────
 

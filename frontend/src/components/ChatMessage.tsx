@@ -26,9 +26,12 @@ export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
             <div className="msg__role">{isUser ? 'You' : 'TheMovie'}</div>
             <div className="msg__body">
                 {message.parts.map((part, index) => {
+                    // Tool parts have a stable id; other parts (text, reasoning,
+                    // step) have none, so key on type + index — stable for the
+                    // append-only stream and resilient if part kinds interleave.
                     const key = isToolPart(part)
                         ? `tool-${part.toolCallId}`
-                        : `${message.id}-p${index}`
+                        : `${message.id}-${part.type}-${index}`
 
                     if (part.type === 'text') {
                         return part.text ? (
