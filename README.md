@@ -51,7 +51,9 @@ cp .env.example .env
 # then fill in OPENAI_API_KEY, TMDB_READ_ACCESS_API_KEY, BETTER_AUTH_SECRET, DATABASE_URL, …
 
 # make sure Postgres (with pgvector) and Redis are reachable, then run migrations
-bunx drizzle-kit migrate
+# (Bun-native runner over Bun.SQL — `drizzle-kit migrate` can't run on this stack,
+#  it requires a node pg/postgres driver we don't install)
+bun run db:migrate
 
 # start the API (hot reload + Drizzle Studio + Redis container)
 bun run dev
