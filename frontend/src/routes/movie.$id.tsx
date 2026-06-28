@@ -1,6 +1,6 @@
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Star } from 'lucide-react'
 import { Alert, AlertAction, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -66,82 +66,94 @@ function MovieDetail() {
     const rating = movie.voteAverage && movie.voteAverage > 0 ? movie.voteAverage.toFixed(1) : null
 
     return (
-        <main className="relative mx-auto w-full max-w-[1100px] px-6 py-10">
-            <div
-                className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[340px] bg-cover bg-[center_20%] opacity-20 [mask-image:linear-gradient(to_bottom,black,transparent)]"
-                style={
-                    movie.backdropPath
-                        ? { backgroundImage: `url(${TMDB_BACKDROP_BASE}${movie.backdropPath})` }
-                        : undefined
-                }
-                aria-hidden="true"
-            />
-
+        <main className="mx-auto w-full max-w-[1100px] px-6 py-8">
             <Link
                 to="/"
-                className="relative z-10 mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+                className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
             >
                 <ArrowLeft className="size-4" aria-hidden="true" /> Back to discovery
             </Link>
 
-            <div className="relative z-10 grid grid-cols-1 gap-8 sm:grid-cols-[240px_1fr] sm:items-start">
-                <div className="aspect-[2/3] overflow-hidden rounded-xl border border-border bg-muted max-sm:max-w-[200px]">
-                    {movie.posterPath ? (
-                        <img
-                            src={`${TMDB_POSTER_BASE}${movie.posterPath}`}
-                            alt={`${movie.title} poster`}
-                            width={342}
-                            height={513}
-                            className="h-full w-full object-cover"
-                        />
-                    ) : (
-                        <div
-                            className="grid h-full w-full place-items-center text-4xl opacity-40"
-                            aria-hidden="true"
-                        >
-                            🎬
+            {/* Cinematic hero: the backdrop fills the band behind a gradient scrim,
+                with the poster and metadata over it. */}
+            <section className="relative overflow-hidden rounded-2xl border border-border bg-card">
+                {movie.backdropPath && (
+                    <div
+                        className="pointer-events-none absolute inset-0 bg-cover bg-[center_20%] opacity-30"
+                        style={{
+                            backgroundImage: `url(${TMDB_BACKDROP_BASE}${movie.backdropPath})`,
+                        }}
+                        aria-hidden="true"
+                    />
+                )}
+                <div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-card via-card/95 to-card/65"
+                    aria-hidden="true"
+                />
+
+                <div className="relative grid grid-cols-1 gap-6 p-6 sm:grid-cols-[210px_1fr] sm:gap-8 sm:p-8">
+                    <div className="aspect-[2/3] overflow-hidden rounded-xl border border-border bg-muted shadow-md max-sm:max-w-[180px]">
+                        {movie.posterPath ? (
+                            <img
+                                src={`${TMDB_POSTER_BASE}${movie.posterPath}`}
+                                alt={`${movie.title} poster`}
+                                width={342}
+                                height={513}
+                                className="h-full w-full object-cover"
+                            />
+                        ) : (
+                            <div
+                                className="grid h-full w-full place-items-center text-4xl opacity-40"
+                                aria-hidden="true"
+                            >
+                                🎬
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="sm:py-1">
+                        <h1 className="mb-3 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+                            {movie.title}
+                        </h1>
+                        <div className="mb-4 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-muted-foreground">
+                            <span>{releaseYear(movie)}</span>
+                            {runtime && (
+                                <>
+                                    <span aria-hidden="true">·</span>
+                                    <span>{runtime}</span>
+                                </>
+                            )}
+                            {rating && (
+                                <span
+                                    className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 font-medium text-secondary-foreground"
+                                    aria-label={`Rated ${rating} out of 10`}
+                                >
+                                    <Star
+                                        className="size-3.5 fill-primary text-primary"
+                                        aria-hidden="true"
+                                    />
+                                    {rating}
+                                </span>
+                            )}
                         </div>
-                    )}
-                </div>
 
-                <div>
-                    <h1 className="mb-3 text-3xl font-semibold leading-tight tracking-tight sm:text-4xl lg:text-5xl">
-                        {movie.title}
-                    </h1>
-                    <p className="mb-4 flex items-center gap-2.5 text-sm text-muted-foreground">
-                        <span>{releaseYear(movie)}</span>
-                        {runtime && (
-                            <>
-                                <span aria-hidden="true">·</span>
-                                <span>{runtime}</span>
-                            </>
+                        {movie.genres.length > 0 && (
+                            <ul className="mb-5 flex list-none flex-wrap gap-2 p-0">
+                                {movie.genres.map((genre) => (
+                                    <li key={genre}>
+                                        <Badge variant="secondary">{genre}</Badge>
+                                    </li>
+                                ))}
+                            </ul>
                         )}
-                        {rating && (
-                            <>
-                                <span aria-hidden="true">·</span>
-                                <span className="font-semibold text-primary">★ {rating}</span>
-                            </>
+
+                        {movie.tagline && (
+                            <p className="mb-4 italic text-muted-foreground">“{movie.tagline}”</p>
                         )}
-                    </p>
+                        {movie.overview && (
+                            <p className="mb-7 max-w-[60ch] leading-relaxed">{movie.overview}</p>
+                        )}
 
-                    {movie.genres.length > 0 && (
-                        <ul className="mb-5 flex list-none flex-wrap gap-2 p-0">
-                            {movie.genres.map((genre) => (
-                                <li key={genre}>
-                                    <Badge variant="secondary">{genre}</Badge>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-
-                    {movie.tagline && (
-                        <p className="mb-4 italic text-muted-foreground">“{movie.tagline}”</p>
-                    )}
-                    {movie.overview && (
-                        <p className="mb-7 max-w-[60ch] leading-relaxed">{movie.overview}</p>
-                    )}
-
-                    <div className="mt-2">
                         <WatchlistButton
                             movieId={movie.tmdbId}
                             title={movie.title}
@@ -149,9 +161,9 @@ function MovieDetail() {
                         />
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div className="relative z-10 mt-12">
+            <div className="mt-12">
                 {extras.isPending ? (
                     <MovieExtrasSkeleton />
                 ) : extras.isError ? (
@@ -176,7 +188,7 @@ function MovieDetail() {
                 )}
             </div>
 
-            <div className="relative z-10 mt-12">
+            <div className="mt-12">
                 {summary.isPending ? (
                     <ReviewSummarySkeleton />
                 ) : summary.isError ? (
@@ -189,7 +201,7 @@ function MovieDetail() {
             </div>
 
             {extras.isSuccess && extras.data.recommendations.length > 0 && (
-                <div className="relative z-10 mt-12">
+                <div className="mt-12">
                     <MoreLikeThis movies={extras.data.recommendations} />
                 </div>
             )}
