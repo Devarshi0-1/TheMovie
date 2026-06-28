@@ -153,3 +153,13 @@
     @apply text-primary not-italic;
   }
 }
+
+/* Respect reduced-motion: skip the route View Transition crossfade/morph for
+   users who ask for less motion (the navigation still happens instantly). */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
