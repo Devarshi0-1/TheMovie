@@ -82,6 +82,7 @@ export function toMovieResult(raw: TmdbListItemLike): MovieResult | null {
         posterPath: raw.poster_path ?? null,
         backdropPath: raw.backdrop_path ?? null,
         voteAverage: typeof raw.vote_average === 'number' ? raw.vote_average : null,
+        mediaType: 'movie',
     }
 }
 
@@ -110,6 +111,95 @@ export function toMovieDetailView(raw: TmdbDetailLike, fallbackId: number): Movi
         tagline: raw.tagline ?? null,
         runtime: raw.runtime ?? null,
         voteAverage: raw.vote_average ?? null,
+        mediaType: 'movie',
+    }
+}
+
+// ── TV shows ─────────────────────────────────────────────────────────────────
+// TV is served as a TMDB proxy and mapped onto the SAME display shapes as movies
+// (with mediaType: 'tv') so the frontend reuses one card/detail UI. TMDB's TV
+// genre ids are a different set from movies, so they get their own lookup.
+
+export const TMDB_TV_GENRES: Record<number, string> = {
+    10759: 'Action & Adventure',
+    16: 'Animation',
+    35: 'Comedy',
+    80: 'Crime',
+    99: 'Documentary',
+    18: 'Drama',
+    10751: 'Family',
+    10762: 'Kids',
+    9648: 'Mystery',
+    10763: 'News',
+    10764: 'Reality',
+    10765: 'Sci-Fi & Fantasy',
+    10766: 'Soap',
+    10767: 'Talk',
+    10768: 'War & Politics',
+    37: 'Western',
+}
+
+/** Resolve TMDB TV genre ids to names, dropping any unknown id. */
+export function tvGenreNames(ids: number[] | null | undefined): string[] {
+    if (!ids) return []
+    return ids.map((id) => TMDB_TV_GENRES[id]).filter((name): name is string => Boolean(name))
+}
+
+interface TvListItemLike {
+    id?: number
+    name?: string | null
+    overview?: string | null
+    first_air_date?: string | null
+    poster_path?: string | null
+    backdrop_path?: string | null
+    genre_ids?: number[] | null
+    vote_average?: number | null
+}
+
+interface TvDetailLike extends TvListItemLike {
+    genres?: { id?: number; name?: string }[] | null
+    tagline?: string | null
+    episode_run_time?: number[] | null
+}
+
+/** A TMDB TV list/search item → the shared `MovieResult` shape (mediaType tv). */
+export function toTvResult(raw: TvListItemLike): MovieResult | null {
+    if (typeof raw.id !== 'number') return null
+    return {
+        tmdbId: raw.id,
+        title: raw.name ?? 'Untitled',
+        overview: raw.overview ?? null,
+        releaseDate: raw.first_air_date ?? null,
+        genres: tvGenreNames(raw.genre_ids),
+        posterPath: raw.poster_path ?? null,
+        backdropPath: raw.backdrop_path ?? null,
+        voteAverage: typeof raw.vote_average === 'number' ? raw.vote_average : null,
+        mediaType: 'tv',
+    }
+}
+
+/** Map a raw TMDB TV list payload to display shows, dropping id-less items. */
+export function toTvResults(raw: TvListItemLike[]): MovieResult[] {
+    return raw.map(toTvResult).filter((m): m is MovieResult => m !== null)
+}
+
+/** A full TMDB TV details payload → the shared detail view model (mediaType tv). */
+export function toTvDetailView(raw: TvDetailLike, fallbackId: number): MovieDetailView {
+    return {
+        tmdbId: typeof raw.id === 'number' ? raw.id : fallbackId,
+        title: raw.name ?? 'Untitled',
+        overview: raw.overview ?? null,
+        releaseDate: raw.first_air_date ?? null,
+        genres: (raw.genres ?? [])
+            .map((g) => g.name)
+            .filter((name): name is string => Boolean(name)),
+        posterPath: raw.poster_path ?? null,
+        backdropPath: raw.backdrop_path ?? null,
+        tagline: raw.tagline ?? null,
+        // A TV "runtime" is per-episode; surface the first listed episode length.
+        runtime: raw.episode_run_time?.[0] ?? null,
+        voteAverage: typeof raw.vote_average === 'number' ? raw.vote_average : null,
+        mediaType: 'tv',
     }
 }
 
@@ -236,6 +326,59 @@ export function toMovieExtrasView(
         trailer: pickTrailer(raw.videos?.results),
         watchProviders: toWatchProviders(raw['watch/providers']?.results, region),
         recommendations: toMovieResults(raw.recommendations?.results ?? []).slice(
+            0,
+            RECOMMENDATIONS_LIMIT,
+        ),
+    }
+}
+
+// TV extras mirror movie extras, but recommendations are TV items (mapped with
+// toTvResults so their titles/dates come from name/first_air_date) and the
+// "director" is the show's creator/director where TMDB lists one.
+interface TvExtrasLike {
+    credits?: {
+        cast?: {
+            id?: number
+            name?: string
+            character?: string | null
+            profile_path?: string | null
+        }[]
+        crew?: { name?: string; job?: string }[]
+    }
+    videos?: { results?: RawVideo[] }
+    recommendations?: { results?: TvListItemLike[] }
+    'watch/providers'?: { results?: Record<string, RawRegionProviders> }
+}
+
+/**
+ * Map TMDB's TV append_to_response payload onto the shared `MovieExtras` view
+ * model — top-billed cast, a director/creator, the best trailer, where-to-watch,
+ * and "more like this" (as TV shows so their cards route to `/tv/:id`).
+ */
+export function toTvExtrasView(
+    raw: TvExtrasLike,
+    region: string = DEFAULT_WATCH_REGION,
+): MovieExtras {
+    const cast: CastMember[] = (raw.credits?.cast ?? [])
+        .slice(0, CAST_LIMIT)
+        .filter((c) => typeof c.id === 'number' && typeof c.name === 'string')
+        .map((c) => ({
+            id: c.id as number,
+            name: c.name as string,
+            character: c.character ?? null,
+            profilePath: c.profile_path ?? null,
+        }))
+
+    const director =
+        (raw.credits?.crew ?? []).find((c) => c.job === 'Director' || c.job === 'Series Director')
+            ?.name ?? null
+
+    return {
+        cast,
+        director,
+        trailer: pickTrailer(raw.videos?.results),
+        watchProviders: toWatchProviders(raw['watch/providers']?.results, region),
+        recommendations: toTvResults(raw.recommendations?.results ?? []).slice(
             0,
             RECOMMENDATIONS_LIMIT,
         ),
