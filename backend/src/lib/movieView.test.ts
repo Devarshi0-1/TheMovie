@@ -7,7 +7,12 @@ import {
     toMovieExtrasView,
     toMovieResult,
     toMovieResults,
+    toTvDetailView,
+    toTvExtrasView,
+    toTvResult,
+    toTvResults,
     toWatchProviders,
+    tvGenreNames,
 } from './movieView'
 
 const RAW_LIST_ITEM = {
@@ -47,6 +52,7 @@ describe('movieView mapping (DL-10: TMDB → shared display schemas)', () => {
             posterPath: '/poster.jpg',
             backdropPath: '/backdrop.jpg',
             voteAverage: 8.4,
+            mediaType: 'movie',
         })
         // The output satisfies the contract the frontend will validate against.
         expect(MovieResultSchema.safeParse(movie).success).toBe(true)
@@ -93,6 +99,7 @@ describe('movieView mapping (DL-10: TMDB → shared display schemas)', () => {
             posterPath: null,
             backdropPath: null,
             voteAverage: null,
+            mediaType: 'movie',
         })
     })
 
@@ -213,5 +220,92 @@ describe('toMovieExtrasView (cast/trailer/where-to-watch/recommendations)', () =
         expect(pickTrailer([{ key: 'x', site: 'Vimeo', type: 'Trailer' }])).toBeNull()
         // A YouTube clip that isn't a trailer/teaser is still embeddable.
         expect(pickTrailer([{ key: 'clip', site: 'YouTube', type: 'Clip' }])?.key).toBe('clip')
+    })
+})
+
+const RAW_TV_LIST_ITEM = {
+    id: 1399,
+    name: 'Game of Thrones',
+    overview: 'Seven noble families fight…',
+    first_air_date: '2011-04-17',
+    poster_path: '/got.jpg',
+    backdrop_path: '/got-bd.jpg',
+    genre_ids: [10765, 18],
+    vote_average: 8.4,
+}
+
+describe('TV mapping (TMDB /tv → shared display schemas, mediaType: tv)', () => {
+    // ── Feature / happy path ──────────────────────────────────────────────
+    it('maps a raw TV list item onto MovieResult with tv fields (feature)', () => {
+        const show = toTvResult(RAW_TV_LIST_ITEM)
+        expect(show).toEqual({
+            tmdbId: 1399,
+            title: 'Game of Thrones',
+            overview: 'Seven noble families fight…',
+            releaseDate: '2011-04-17',
+            genres: ['Sci-Fi & Fantasy', 'Drama'],
+            posterPath: '/got.jpg',
+            backdropPath: '/got-bd.jpg',
+            voteAverage: 8.4,
+            mediaType: 'tv',
+        })
+        expect(MovieResultSchema.safeParse(show).success).toBe(true)
+    })
+
+    it('resolves TV genre ids against the TV genre set (feature)', () => {
+        expect(tvGenreNames([10759, 10765])).toEqual(['Action & Adventure', 'Sci-Fi & Fantasy'])
+        // A movie-only id (28 = Action) is unknown to the TV set.
+        expect(tvGenreNames([28])).toEqual([])
+    })
+
+    it('maps TV details, taking the first episode runtime (feature)', () => {
+        const details = toTvDetailView(
+            {
+                id: 1399,
+                name: 'Game of Thrones',
+                first_air_date: '2011-04-17',
+                genres: [{ id: 18, name: 'Drama' }],
+                episode_run_time: [60, 55],
+                tagline: 'Winter is coming.',
+                vote_average: 8.4,
+                backdrop_path: '/got-bd.jpg',
+            },
+            1399,
+        )
+        expect(details.title).toBe('Game of Thrones')
+        expect(details.runtime).toBe(60)
+        expect(details.mediaType).toBe('tv')
+        expect(MovieDetailViewSchema.safeParse(details).success).toBe(true)
+    })
+
+    it('maps TV extras with recommendations as tv shows (feature)', () => {
+        const extras = toTvExtrasView({
+            credits: {
+                cast: [{ id: 1, name: 'Emilia Clarke', character: 'Daenerys', profile_path: null }],
+                crew: [{ name: 'David Benioff', job: 'Series Director' }],
+            },
+            videos: { results: [{ key: 'k', site: 'YouTube', type: 'Trailer' }] },
+            recommendations: { results: [{ id: 1396, name: 'Breaking Bad', genre_ids: [18] }] },
+        })
+        expect(extras.cast[0]?.name).toBe('Emilia Clarke')
+        expect(extras.director).toBe('David Benioff')
+        expect(extras.recommendations[0]).toMatchObject({
+            tmdbId: 1396,
+            title: 'Breaking Bad',
+            mediaType: 'tv',
+        })
+        expect(MovieExtrasSchema.safeParse(extras).success).toBe(true)
+    })
+
+    // ── Edge cases ────────────────────────────────────────────────────────
+    it('returns null for a TV item without a numeric id (edge)', () => {
+        expect(toTvResult({ name: 'no id' })).toBeNull()
+    })
+
+    it('handles missing episode_run_time and genres (edge)', () => {
+        const details = toTvDetailView({ id: 5, name: 'Mystery Show', genres: null }, 5)
+        expect(details.runtime).toBeNull()
+        expect(details.genres).toEqual([])
+        expect(toTvResults([{ id: 1, name: 'A' }, { name: 'no id' }])).toHaveLength(1)
     })
 })

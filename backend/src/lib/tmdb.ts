@@ -207,6 +207,112 @@ export const getMovieExtras = (
         ),
     )
 
+// ── TV shows ─────────────────────────────────────────────────────────────────
+// TV mirrors the movie endpoints (trending / search / details / extras) but on
+// TMDB's `/tv/*` routes. Served purely as a TMDB proxy — TV is NOT ingested or
+// embedded (that's the costly path), so there's no DB/agent involvement here.
+// Shapes are kept local + loose (the mappers in movieView read defensively),
+// rather than threading the huge generated `paths` types through.
+
+export interface TvListItem {
+    id?: number
+    name?: string | null
+    overview?: string | null
+    first_air_date?: string | null
+    poster_path?: string | null
+    backdrop_path?: string | null
+    genre_ids?: number[] | null
+    vote_average?: number | null
+}
+
+export interface TvDetailsResponse {
+    id?: number
+    name?: string | null
+    overview?: string | null
+    first_air_date?: string | null
+    poster_path?: string | null
+    backdrop_path?: string | null
+    genres?: { id?: number; name?: string }[] | null
+    tagline?: string | null
+    vote_average?: number | null
+    episode_run_time?: number[] | null
+    number_of_seasons?: number | null
+    number_of_episodes?: number | null
+}
+
+export type TvExtrasResponse = TvDetailsResponse & {
+    credits?: {
+        cast?: {
+            id?: number
+            name?: string
+            character?: string | null
+            profile_path?: string | null
+        }[]
+        crew?: { name?: string; job?: string }[]
+    }
+    videos?: {
+        results?: {
+            key?: string
+            name?: string
+            site?: string
+            type?: string
+            official?: boolean
+        }[]
+    }
+    recommendations?: { results?: TvListItem[] }
+    'watch/providers'?: {
+        results?: Record<
+            string,
+            {
+                link?: string | null
+                flatrate?: {
+                    provider_id?: number
+                    provider_name?: string
+                    logo_path?: string | null
+                }[]
+                rent?: { provider_id?: number; provider_name?: string; logo_path?: string | null }[]
+                buy?: { provider_id?: number; provider_name?: string; logo_path?: string | null }[]
+            }
+        >
+    }
+}
+
+export const getTrendingTv = (cache: TmdbCache = redisCache): Promise<TvListItem[]> =>
+    cached(cache, 'tv:trending:day', async () => {
+        const response = await fetchFromTMDB<{ results?: TvListItem[] }>(
+            '/trending/tv/day?language=en-US',
+        )
+        return response.results ?? []
+    })
+
+export const searchTv = (query: string, cache: TmdbCache = redisCache): Promise<TvListItem[]> => {
+    const normalizedQuery = query.trim().toLowerCase()
+    return cached(cache, `tv:search:${normalizedQuery}`, async () => {
+        const response = await fetchFromTMDB<{ results?: TvListItem[] }>(
+            `/search/tv?query=${encodeURIComponent(normalizedQuery)}&include_adult=false&language=en-US&page=1`,
+        )
+        return response.results ?? []
+    })
+}
+
+export const getTvDetails = (
+    tvId: string,
+    cache: TmdbCache = redisCache,
+): Promise<TvDetailsResponse> =>
+    cached(cache, `tv:${tvId}:details`, () =>
+        fetchFromTMDB<TvDetailsResponse>(`/tv/${tvId}?language=en-US`),
+    )
+
+export const getTvExtras = (
+    tvId: string,
+    cache: TmdbCache = redisCache,
+): Promise<TvExtrasResponse> =>
+    cached(cache, `tv:${tvId}:extras`, () =>
+        fetchFromTMDB<TvExtrasResponse>(
+            `/tv/${tvId}?language=en-US&append_to_response=credits,videos,recommendations,watch/providers`,
+        ),
+    )
+
 // ── Person lookups (Phase 9 — "movies starring X") ───────────────────────────
 // Find a person by name, then pull their movie filmography. Powers the agent's
 // find_movies_by_person tool. Both are cached like everything else.

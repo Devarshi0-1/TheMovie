@@ -49,6 +49,14 @@ describe('MovieResultSchema', () => {
         expect(ScoredMovieResultSchema.parse({ ...valid, similarity: 0.83 }).similarity).toBe(0.83)
         expect(() => ScoredMovieResultSchema.parse(valid)).toThrow()
     })
+
+    it('accepts an optional mediaType discriminator (feature: TV vs movie)', () => {
+        expect(MovieResultSchema.parse({ ...valid, mediaType: 'tv' }).mediaType).toBe('tv')
+        // Absent → undefined (the frontend treats that as a movie).
+        expect(MovieResultSchema.parse(valid).mediaType).toBeUndefined()
+        // Only 'movie' | 'tv' are allowed.
+        expect(() => MovieResultSchema.parse({ ...valid, mediaType: 'podcast' })).toThrow()
+    })
 })
 
 describe('tool input schemas', () => {

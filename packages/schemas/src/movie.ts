@@ -5,12 +5,22 @@ import { z } from 'zod'
 // schema. One definition drives tool input validation (AI SDK), API responses,
 // and (later) the frontend.
 
+/** Distinguishes a movie from a TV show on the otherwise-shared display shape. */
+export const MediaTypeSchema = z.enum(['movie', 'tv'])
+export type MediaType = z.infer<typeof MediaTypeSchema>
+
 /**
  * The compact movie shape the retrieval tools return to the agent and that the
  * list/search endpoints return to the grid. `voteAverage` (TMDB's 0–10 rating)
  * and `backdropPath` are **optional**: the TMDB list mapper populates them so
  * cards can show a rating, but the DB-backed agent retrieval paths omit them
  * (the LLM has no use for a rating, and the rows aren't selected for it).
+ *
+ * `mediaType` is **optional** and defaults to a movie when absent (the agent /
+ * DB paths never set it); the TV endpoints set it to `'tv'` so the frontend can
+ * route a card to the right detail page (`/movie/:id` vs `/tv/:id`). For TV the
+ * shared fields are filled from the show's analogues — `title`←name,
+ * `releaseDate`←first_air_date — so one card/detail UI serves both.
  */
 export const MovieResultSchema = z.object({
     tmdbId: z.number().int(),
@@ -21,6 +31,7 @@ export const MovieResultSchema = z.object({
     posterPath: z.string().nullable(),
     voteAverage: z.number().nullable().optional(),
     backdropPath: z.string().nullable().optional(),
+    mediaType: MediaTypeSchema.optional(),
 })
 export type MovieResult = z.infer<typeof MovieResultSchema>
 
