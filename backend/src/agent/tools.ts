@@ -12,7 +12,7 @@ import {
     type MovieResult,
 } from '@themovie/schemas'
 import { summarizeReviews, summaryDeps } from '../lib/summary'
-import { findMoviesByPerson, findSimilarMovies, getWatchProviders } from './lookups'
+import { findMoviesByPerson, findSimilarMovies, findSimilarTv, getWatchProviders } from './lookups'
 import {
     fetchFromTmdb,
     getMovieDetails,
@@ -176,6 +176,17 @@ const summarizeTvReviewsTool = tool({
     execute: (input) => summarizeReviews(input.tmdbId, summaryDeps('tv')),
 })
 
+const findSimilarTvTool = tool({
+    description:
+        'Get TMDB’s curated "more like this" recommendations for a SPECIFIC TV show by tmdbId. This is ' +
+        'the BEST tool for "shows like <a named series>" (e.g. "shows like Game of Thrones") — it returns ' +
+        'genuinely related series even if they aren’t in our local catalog. First identify the show via ' +
+        'search_tv_sql to get its tmdbId, then call this. Prefer it over semantic_search_tv whenever the ' +
+        'request is anchored on a specific existing show rather than a free-form theme.',
+    inputSchema: SimilarMoviesInputSchema,
+    execute: (input) => findSimilarTv(input),
+})
+
 /** The retrieval toolset the agent loop exposes to the model. */
 export const retrievalTools = {
     search_movies_sql: searchMoviesSqlTool,
@@ -193,6 +204,7 @@ export const retrievalTools = {
     fetch_tv_from_tmdb: fetchTvFromTmdbTool,
     get_trending_tv: getTrendingTvTool,
     summarize_tv_reviews: summarizeTvReviewsTool,
+    find_similar_tv: findSimilarTvTool,
 }
 
 export type RetrievalToolName = keyof typeof retrievalTools

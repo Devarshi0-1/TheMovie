@@ -145,6 +145,26 @@ describe('semanticSearchTv', () => {
         )
         expect(out.map((m) => m.tmdbId)).toEqual([1, 2])
     })
+
+    it('drops sub-floor shows, and returns [] when none clear the floor (feature: quality floor)', async () => {
+        // One real match (0.85) + noise (0.12); then an all-weak catalog.
+        const mixed = fakeDeps({
+            knnSearch: async (_v, _l, field) =>
+                field === 'plot' ? [scoredShow(1, 0.85), scoredShow(2, 0.12)] : [],
+        })
+        const kept = await semanticSearchTv({ query: 'q', limit: 8, mode: 'plot' }, mixed.deps)
+        expect(kept.map((m) => m.tmdbId)).toEqual([1])
+
+        const weak = fakeDeps({
+            knnSearch: async (_v, _l, field) =>
+                field === 'plot' ? [scoredShow(3, 0.15), scoredShow(4, 0.05)] : [],
+        })
+        const empty = await semanticSearchTv(
+            SemanticSearchInputSchema.parse({ query: 'q', limit: 8 }),
+            weak.deps,
+        )
+        expect(empty).toEqual([]) // weak → miss → agent escalates (e.g. to find_similar_tv)
+    })
 })
 
 // ── fetchTvFromTmdb ──────────────────────────────────────────────────────────

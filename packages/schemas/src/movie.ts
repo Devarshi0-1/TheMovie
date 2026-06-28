@@ -42,6 +42,19 @@ export const ScoredMovieResultSchema = MovieResultSchema.extend({
 export type ScoredMovieResult = z.infer<typeof ScoredMovieResultSchema>
 
 /**
+ * Cosine-similarity floor below which a semantic (pgvector kNN) hit is treated
+ * as junk rather than a real match. kNN always returns the nearest K rows even
+ * when "nearest" is poor, so a thin or off-topic catalog would otherwise surface
+ * irrelevant titles. Shared so the backend (drops sub-floor hits from retrieval,
+ * which also makes the agent escalate when nothing clears it) and the frontend
+ * (never renders a sub-floor result as a suggestion card) use one number.
+ * Deliberately conservative — it removes clear noise, not borderline matches;
+ * "titles like <a specific show/film>" is better served by the curated TMDB
+ * recommendation tools than by raising this floor.
+ */
+export const SEMANTIC_MATCH_FLOOR = 0.2
+
+/**
  * The multi-suggest payload: typeahead matches split into Movies and TV Shows
  * groups (the response shape of `GET /api/v1/search/suggest`). Each group is an
  * independent, already-deduped, already-capped `MovieResult[]` carrying its own

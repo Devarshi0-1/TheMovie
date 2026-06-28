@@ -18,12 +18,23 @@ import {
     createChatTransport,
     fetchConversationMessages,
     MANAGE_WATCHLIST,
+    messageText,
     type AppUIMessage,
     type ManageWatchlistOutput,
 } from '../lib/chat'
 import { ChatComposer } from './ChatComposer'
 import { ChatMessage } from './ChatMessage'
 import { CHAT_QUICK_PROMPTS, CHAT_STARTERS, ChatSuggestions } from './ChatSuggestions'
+
+/** The text of the nearest user turn before `index` (the query an assistant turn
+ *  answered), or undefined if none — used to filter the suggestion strip. */
+function precedingUserText(messages: AppUIMessage[], index: number): string | undefined {
+    for (let i = index - 1; i >= 0; i--) {
+        const m = messages[i]
+        if (m?.role === 'user') return messageText(m)
+    }
+    return undefined
+}
 
 /**
  * The chat window. Wires `useChat` to the auth-gated `POST /api/v1/chat`,
@@ -111,7 +122,7 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
                                     </EmptyContent>
                                 </Empty>
                             ) : (
-                                messages.map((message) => (
+                                messages.map((message, index) => (
                                     // Anchor each user turn so the viewport opens on
                                     // the latest exchange and streamed replies stay
                                     // pinned to the live edge.
@@ -123,6 +134,14 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
                                         <ChatMessage
                                             message={message}
                                             onToolResult={handleToolResult}
+                                            // The query this turn answered: the nearest
+                                            // preceding user turn (lets the suggestion
+                                            // strip drop the title the user named).
+                                            queryText={
+                                                message.role === 'assistant'
+                                                    ? precedingUserText(messages, index)
+                                                    : undefined
+                                            }
                                         />
                                     </MessageScrollerItem>
                                 ))

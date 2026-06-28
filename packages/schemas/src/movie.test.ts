@@ -9,6 +9,7 @@ import {
     ReviewSummaryInputSchema,
     ReviewSummarySchema,
     ScoredMovieResultSchema,
+    SEMANTIC_MATCH_FLOOR,
     SemanticSearchInputSchema,
     SimilarMoviesInputSchema,
     SqlSearchInputSchema,
@@ -49,6 +50,11 @@ describe('MovieResultSchema', () => {
     it('ScoredMovieResultSchema requires a similarity number (feature)', () => {
         expect(ScoredMovieResultSchema.parse({ ...valid, similarity: 0.83 }).similarity).toBe(0.83)
         expect(() => ScoredMovieResultSchema.parse(valid)).toThrow()
+    })
+
+    it('exposes a sane semantic-match floor in [0, 1] (feature: shared quality floor)', () => {
+        expect(SEMANTIC_MATCH_FLOOR).toBeGreaterThan(0)
+        expect(SEMANTIC_MATCH_FLOOR).toBeLessThan(1)
     })
 
     it('accepts an optional mediaType discriminator (feature: TV vs movie)', () => {

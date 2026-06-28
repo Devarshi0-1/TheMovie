@@ -203,6 +203,29 @@ describe('semanticSearchMovies', () => {
         )
         expect(out.map((m) => m.tmdbId)).toEqual([1, 2]) // degrades to plot-only ranking
     })
+
+    it('drops sub-floor matches so junk neighbours never surface (feature: quality floor)', async () => {
+        // 0.9 is a real match; 0.1 is noise the thin catalog returned as "nearest".
+        const plot = [scoredMovie(1, 0.9), scoredMovie(2, 0.1)]
+        const { deps } = fakeDeps({
+            knnSearch: async (_v, _l, field) => (field === 'plot' ? plot : []),
+        })
+        const out = await semanticSearchMovies({ query: 'q', limit: 8, mode: 'plot' }, deps)
+        expect(out.map((m) => m.tmdbId)).toEqual([1]) // movie 2 (0.1) filtered out
+    })
+
+    it('returns [] when no neighbour clears the floor, so the agent escalates (edge: weak→miss)', async () => {
+        const weak = [scoredMovie(1, 0.15), scoredMovie(2, 0.05)]
+        const { deps } = fakeDeps({
+            knnSearch: async (_v, _l, field) => (field === 'plot' ? weak : []),
+        })
+        const out = await semanticSearchMovies(
+            SemanticSearchInputSchema.parse({ query: 'q', limit: 8 }),
+            deps,
+        )
+        // Everything below the floor → empty → treated as a miss (escalation path).
+        expect(out).toEqual([])
+    })
 })
 
 // ── fetchFromTmdb ────────────────────────────────────────────────────────────

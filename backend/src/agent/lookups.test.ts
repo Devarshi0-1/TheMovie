@@ -2,11 +2,18 @@ import { describe, expect, it } from 'bun:test'
 import {
     findMoviesByPerson,
     findSimilarMovies,
+    findSimilarTv,
     getWatchProviders,
     type ExtrasLookupDeps,
     type PersonLookupDeps,
+    type TvExtrasLookupDeps,
 } from './lookups'
-import type { MovieExtrasResponse, PersonMovieCredits, PersonSearchResult } from '../lib/tmdb'
+import type {
+    MovieExtrasResponse,
+    PersonMovieCredits,
+    PersonSearchResult,
+    TvExtrasResponse,
+} from '../lib/tmdb'
 
 // ── find_movies_by_person ────────────────────────────────────────────────────
 
@@ -146,6 +153,44 @@ describe('findSimilarMovies ("more like this")', () => {
 
     it('honors the limit (edge)', async () => {
         const out = await findSimilarMovies({ tmdbId: 27205, limit: 1 }, extrasDeps())
+        expect(out).toHaveLength(1)
+    })
+})
+
+// ── find_similar_tv ("shows like X") ─────────────────────────────────────────
+
+const TV_EXTRAS_RAW = {
+    id: 1399,
+    name: 'Game of Thrones',
+    recommendations: {
+        results: [
+            {
+                id: 94997,
+                name: 'House of the Dragon',
+                genre_ids: [10765],
+                first_air_date: '2022-08-21',
+            },
+            { id: 71912, name: 'The Witcher', genre_ids: [10765] },
+        ],
+    },
+} as unknown as TvExtrasResponse
+
+const tvExtrasDeps = (raw: TvExtrasResponse = TV_EXTRAS_RAW): TvExtrasLookupDeps => ({
+    tvExtras: async () => raw,
+})
+
+describe('findSimilarTv ("shows like X")', () => {
+    it('returns TMDB TV recommendations, tagged mediaType tv (feature: TV similarity)', async () => {
+        const out = await findSimilarTv({ tmdbId: 1399, limit: 10 }, tvExtrasDeps())
+        expect(out.map((m) => m.title)).toEqual(['House of the Dragon', 'The Witcher'])
+        // name→title, first_air_date→releaseDate, and mediaType:'tv' so cards
+        // route to /tv/:id.
+        expect(out.every((m) => m.mediaType === 'tv')).toBe(true)
+        expect(out[0]!.releaseDate).toBe('2022-08-21')
+    })
+
+    it('honors the limit (edge)', async () => {
+        const out = await findSimilarTv({ tmdbId: 1399, limit: 1 }, tvExtrasDeps())
         expect(out).toHaveLength(1)
     })
 })

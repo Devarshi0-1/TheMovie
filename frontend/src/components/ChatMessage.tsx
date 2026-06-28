@@ -15,6 +15,9 @@ import { WatchlistConfirm, WatchlistOutcome } from './WatchlistConfirm'
 interface ChatMessageProps {
     message: AppUIMessage
     onToolResult: (toolCallId: string, output: ManageWatchlistOutput) => void
+    /** The user query this assistant turn answered — lets the suggestion strip
+     *  drop the title the user named (e.g. "shows like X" returning X itself). */
+    queryText?: string
 }
 
 /**
@@ -24,11 +27,12 @@ interface ChatMessageProps {
  * either the approve/deny prompt (while awaiting confirmation) or the settled
  * outcome.
  */
-export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
+export function ChatMessage({ message, onToolResult, queryText }: ChatMessageProps) {
     const isUser = message.role === 'user'
-    // The movies this turn surfaced across its tool calls, rendered as a clickable
-    // strip below the text (assistant turns only; empty otherwise).
-    const suggestedMovies = extractSuggestedMovies(message)
+    // The titles this turn surfaced across its tool calls, rendered as a clickable
+    // strip below the text (assistant turns only; empty otherwise). The query text
+    // lets us drop the title the user named and weak semantic matches.
+    const suggestedMovies = extractSuggestedMovies(message, queryText)
 
     return (
         <Message align={isUser ? 'end' : 'start'}>
