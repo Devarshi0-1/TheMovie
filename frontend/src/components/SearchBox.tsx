@@ -6,6 +6,7 @@ import type { MovieResult } from '@themovie/schemas'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useDebouncedValue } from '../hooks/use-debounced-value'
 import { releaseYear, suggestAllQueryOptions, suggestTvQueryOptions } from '../lib/movies'
 
 // Small poster for the suggestion thumbnails (TMDB serves posters at w92).
@@ -85,7 +86,12 @@ export function SearchBox({
     const listId = useId()
     const [open, setOpen] = useState(false)
 
-    const q = value.trim()
+    // The live value drives the dropdown's open/visible state (instant feedback);
+    // the debounced value drives the actual suggest request, so fast typing fires
+    // one query after a pause rather than one per keystroke.
+    const liveQ = value.trim()
+    const q = useDebouncedValue(liveQ, 250)
+    const hasLiveQuery = liveQ.length >= 2
     const hasQuery = q.length >= 2
     // Both hooks are always called (Rules of Hooks); only the in-scope one is
     // enabled, so the other never fetches.
@@ -99,8 +105,11 @@ export function SearchBox({
     const tv = scope === 'all' ? (allQuery.data?.tv ?? []) : (tvQuery.data ?? [])
     const total = movies.length + tv.length
     const isFetching = scope === 'all' ? allQuery.isFetching : tvQuery.isFetching
-    const showLoading = hasQuery && isFetching && total === 0
-    const showList = open && hasQuery && (total > 0 || showLoading)
+    // Pending = the user has typed a searchable query the debounce hasn't caught
+    // up to yet. Show skeletons while pending OR fetching, until results land.
+    const debouncePending = hasLiveQuery && liveQ !== q
+    const showLoading = hasLiveQuery && (debouncePending || isFetching) && total === 0
+    const showList = open && hasLiveQuery && (total > 0 || showLoading)
 
     return (
         <search

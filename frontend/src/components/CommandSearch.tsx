@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/command'
 import { Kbd } from '@/components/ui/kbd'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useDebouncedValue } from '../hooks/use-debounced-value'
 import { releaseYear, suggestAllQueryOptions } from '../lib/movies'
 
 // Small poster for the suggestion thumbnails (TMDB serves posters at w92).
@@ -86,13 +87,19 @@ export function CommandSearch() {
         return () => document.removeEventListener('keydown', onKey)
     }, [])
 
-    const q = query.trim()
+    // Debounce the query feeding the request so fast typing fires one suggest
+    // call after a pause, not one per keystroke. `liveQ` keeps the palette's
+    // prompts/loading state responsive to what's actually in the box.
+    const liveQ = query.trim()
+    const q = useDebouncedValue(liveQ, 250)
+    const hasLiveQuery = liveQ.length >= 2
     const hasQuery = q.length >= 2
-    const suggestions = useQuery(suggestAllQueryOptions(q))
+    const suggestions = useQuery({ ...suggestAllQueryOptions(q), enabled: hasQuery })
     const movies = suggestions.data?.movies ?? []
     const tv = suggestions.data?.tv ?? []
     const total = movies.length + tv.length
-    const showLoading = hasQuery && suggestions.isFetching && total === 0
+    const debouncePending = hasLiveQuery && liveQ !== q
+    const showLoading = hasLiveQuery && (debouncePending || suggestions.isFetching) && total === 0
 
     function close() {
         setOpen(false)
@@ -109,7 +116,7 @@ export function CommandSearch() {
     }
 
     function searchAll() {
-        const next = q
+        const next = liveQ
         close()
         void navigate({ to: '/', search: next ? { q: next } : {} })
     }
@@ -142,7 +149,7 @@ export function CommandSearch() {
                         placeholder="Search movies & TV…"
                     />
                     <CommandList>
-                        {!hasQuery && (
+                        {!hasLiveQuery && (
                             <p className="py-6 text-center text-sm text-muted-foreground">
                                 Type at least 2 characters to search.
                             </p>
@@ -154,9 +161,9 @@ export function CommandSearch() {
                                     <Skeleton className="h-4 w-40 rounded" />
                                 </div>
                             ))}
-                        {hasQuery && !showLoading && total === 0 && (
+                        {hasLiveQuery && !showLoading && total === 0 && (
                             <p className="py-6 text-center text-sm text-muted-foreground">
-                                Nothing matches “{q}”.
+                                Nothing matches “{liveQ}”.
                             </p>
                         )}
                         {movies.length > 0 && (
@@ -181,11 +188,11 @@ export function CommandSearch() {
                                 ))}
                             </CommandGroup>
                         )}
-                        {hasQuery && (
+                        {hasLiveQuery && (
                             <CommandGroup>
                                 <CommandItem value="__search_all__" onSelect={searchAll}>
                                     <Search aria-hidden="true" />
-                                    Search all results for “{q}”
+                                    Search all results for “{liveQ}”
                                 </CommandItem>
                             </CommandGroup>
                         )}
