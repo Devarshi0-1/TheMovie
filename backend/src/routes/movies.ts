@@ -8,6 +8,7 @@ import {
     toMovieResults,
 } from '../lib/movieView'
 import { summarizeReviews } from '../lib/summary'
+import { suggestMovies } from '../lib/suggest'
 
 // These endpoints proxy TMDB but speak the shared camelCase contract — the
 // frontend receives `MovieResult` / `MovieDetailView` and never sees TMDB's raw
@@ -53,6 +54,24 @@ moviesRoute.get('/search', async (c) => {
     } catch (error) {
         console.error('Error searching movies:', error)
         return c.json({ error: 'Failed to fetch search results' }, 500)
+    }
+})
+
+// Typeahead suggestions for the search box: local catalog + TMDB, deduped.
+// A blank query returns an empty list (200), not a 400 — the box queries as the
+// user types and an empty box simply has nothing to suggest.
+moviesRoute.get('/suggest', async (c) => {
+    try {
+        const query = c.req.query('q')?.trim()
+        if (!query) return c.json([])
+        if (query.length > 200) {
+            return c.json({ error: 'Query is too long (max 200 characters)' }, 400)
+        }
+
+        return c.json(await suggestMovies(query))
+    } catch (error) {
+        console.error('Error fetching suggestions:', error)
+        return c.json({ error: 'Failed to fetch suggestions' }, 500)
     }
 })
 

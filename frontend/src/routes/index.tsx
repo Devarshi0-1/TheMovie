@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { MovieGrid } from '../components/MovieGrid'
-import { SearchBar } from '../components/SearchBar'
+import { SearchBox } from '../components/SearchBox'
 import { searchMoviesQueryOptions, trendingMoviesQueryOptions } from '../lib/movies'
 import { TMDB_BACKDROP_BASE } from '../lib/tmdb'
 
@@ -78,7 +78,7 @@ function Discover() {
                     </p>
                     <div className="flex max-w-[640px] flex-col gap-3 sm:flex-row sm:items-center">
                         <div className="flex-1">
-                            <SearchBar
+                            <SearchBox
                                 value={draft}
                                 onChange={handleChange}
                                 onSubmit={commit}
