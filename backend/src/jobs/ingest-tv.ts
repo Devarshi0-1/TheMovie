@@ -1,89 +1,48 @@
 import { inArray, sql } from 'drizzle-orm'
 import { db } from '../db'
-import { movies } from '../db/schema'
+import { tvShows } from '../db/schema'
 import {
     composeEmbeddingText,
     contentHashFor,
     embedTexts,
     EMBEDDING_DIMENSIONS,
 } from '../lib/embeddings'
-import {
-    discoverMoviePage,
-    getMovieForIngest,
-    getNowPlayingPage,
-    type MovieForIngest,
-} from '../lib/tmdb'
+import { discoverTvPage, getPopularTvPage, getTvForIngest, type TvForIngest } from '../lib/tmdb'
+import { capForEmbedding } from './ingest'
 
-// text-embedding-3-small accepts ~8191 tokens (~30k chars). Movie text is far
-// shorter, but cap defensively so an oversized field can never overflow the
-// model's input window. Reviews (Phase 4.5/5.2) are the realistic chunk case.
-const EMBED_INPUT_CHAR_BUDGET = 30_000
+// The TV mirror of `ingest.ts` (Phase 10 — TV as first-class). Same idempotent
+// core — prepare → skip unchanged (by source hash) → embed only the changed
+// subset → upsert keyed on `tmdb_id` — but targeting the `tv_shows` table and
+// mapping TMDB's TV shape (`name` → title, `first_air_date` → releaseDate,
+// keywords nested under `keywords.results`). The embedding text composition,
+// hashing, capping, and cache all reuse the shared movie helpers, so a show and
+// a film land in the same vector space and a re-run is a cheap no-op.
 
-export type MovieInsertRow = typeof movies.$inferInsert
-type MovieInsert = MovieInsertRow
+export type TvInsertRow = typeof tvShows.$inferInsert
+type TvInsert = TvInsertRow
 
-/**
- * Split text into chunks no longer than `maxChars`, breaking on the coarsest
- * available boundary (paragraph → sentence → word) before falling back to a
- * hard cut. Keeps embeddable units semantically whole.
- */
-export function chunkText(text: string, maxChars = 2000): string[] {
-    if (maxChars <= 0) throw new Error('maxChars must be positive')
-
-    const trimmed = text.trim()
-    if (trimmed.length <= maxChars) return trimmed ? [trimmed] : []
-
-    const chunks: string[] = []
-    let rest = trimmed
-    while (rest.length > maxChars) {
-        const window = rest.slice(0, maxChars)
-        // Prefer the last paragraph break, then sentence, then word boundary.
-        const breakAt =
-            lastBoundary(window, '\n\n') ?? lastBoundary(window, '. ') ?? window.lastIndexOf(' ')
-        const cut = breakAt && breakAt > maxChars * 0.5 ? breakAt : maxChars
-        chunks.push(rest.slice(0, cut).trim())
-        rest = rest.slice(cut).trim()
-    }
-    if (rest) chunks.push(rest)
-    return chunks
-}
-
-function lastBoundary(window: string, sep: string): number | null {
-    const idx = window.lastIndexOf(sep)
-    return idx === -1 ? null : idx + sep.length
-}
-
-// Cap composed text to the model window. Movie text never hits this, but a
-// stray oversized overview would otherwise be rejected by the embeddings API.
-// Exported so the TV ingest (Phase 10) reuses the exact same capping rule.
-export function capForEmbedding(text: string): string {
-    if (text.length <= EMBED_INPUT_CHAR_BUDGET) return text
-    const [head] = chunkText(text, EMBED_INPUT_CHAR_BUDGET)
-    return head ?? text.slice(0, EMBED_INPUT_CHAR_BUDGET)
-}
-
-export interface PreparedMovie {
+export interface PreparedTvShow {
     tmdbId: number
     /** The exact text that will be embedded (already capped). */
     sourceText: string
     /** Row to upsert, minus the `embedding` (filled in after embedding). */
-    row: Omit<MovieInsert, 'embedding'>
+    row: Omit<TvInsert, 'embedding'>
 }
 
 /**
- * Map an enriched TMDB detail into a prepared, upsert-ready row plus the text to
- * embed and its content hash. Returns `null` for rows missing the natural key or
- * a title (a movie row is meaningless without either).
+ * Map an enriched TMDB TV detail into a prepared, upsert-ready row plus the text
+ * to embed and its content hash. Returns `null` for rows missing the natural key
+ * or a name (a show row is meaningless without either).
  */
-export function prepareMovie(detail: MovieForIngest): PreparedMovie | null {
+export function prepareTvShow(detail: TvForIngest): PreparedTvShow | null {
     const tmdbId = detail.id
-    const title = detail.title?.trim()
+    const title = detail.name?.trim()
     if (typeof tmdbId !== 'number' || !title) return null
 
     const genres = (detail.genres ?? [])
         .map((g) => g.name?.trim())
         .filter((n): n is string => Boolean(n))
-    const keywords = (detail.keywords?.keywords ?? [])
+    const keywords = (detail.keywords?.results ?? [])
         .map((k) => k.name?.trim())
         .filter((n): n is string => Boolean(n))
 
@@ -100,13 +59,9 @@ export function prepareMovie(detail: MovieForIngest): PreparedMovie | null {
             overview: detail.overview ?? null,
             posterPath: detail.poster_path ?? null,
             backdropPath: detail.backdrop_path ?? null,
-            releaseDate: detail.release_date || null,
+            releaseDate: detail.first_air_date || null,
             genres,
             keywords,
-            // Full raw TMDB blob, stored un-indexed and never projected into
-            // queries (its GIN index was dropped in migration 0006). Kept whole
-            // — at a deliberate storage cost — as the self-healing source of
-            // truth, so new fields can be derived later without re-fetching TMDB.
             metadata: detail,
             sourceHash: contentHashFor(sourceText),
         },
@@ -115,49 +70,44 @@ export function prepareMovie(detail: MovieForIngest): PreparedMovie | null {
 
 // Keep the last occurrence of each tmdb_id so a duplicate within one batch can't
 // trigger a same-key conflict in a single INSERT statement.
-function dedupeByTmdbId(prepared: PreparedMovie[]): PreparedMovie[] {
-    const byId = new Map<number, PreparedMovie>()
+function dedupeByTmdbId(prepared: PreparedTvShow[]): PreparedTvShow[] {
+    const byId = new Map<number, PreparedTvShow>()
     for (const p of prepared) byId.set(p.tmdbId, p)
     return [...byId.values()]
 }
 
 export interface IngestStats {
-    /** Details handed to the ingester. */
     total: number
-    /** Valid, de-duplicated rows. */
     prepared: number
-    /** Dropped for missing id/title. */
     invalid: number
-    /** Embedded + written (new or changed source text). */
     embedded: number
-    /** Unchanged source hash — skipped, no embed, no write. */
     skipped: number
 }
 
 // IO seams, injected so the idempotency core is testable without a live DB/API.
-export interface IngestDeps {
+export interface TvIngestDeps {
     fetchExistingHashes: (tmdbIds: number[]) => Promise<Map<number, string>>
-    upsertMovies: (rows: MovieInsert[]) => Promise<void>
+    upsertTvShows: (rows: TvInsert[]) => Promise<void>
     embed: (texts: string[]) => Promise<number[][]>
 }
 
-function defaultDeps(): IngestDeps {
+function defaultDeps(): TvIngestDeps {
     return {
         async fetchExistingHashes(tmdbIds) {
             if (tmdbIds.length === 0) return new Map()
             const rows = await db
-                .select({ tmdbId: movies.tmdbId, sourceHash: movies.sourceHash })
-                .from(movies)
-                .where(inArray(movies.tmdbId, tmdbIds))
+                .select({ tmdbId: tvShows.tmdbId, sourceHash: tvShows.sourceHash })
+                .from(tvShows)
+                .where(inArray(tvShows.tmdbId, tmdbIds))
             return new Map(rows.map((r) => [r.tmdbId, r.sourceHash ?? '']))
         },
-        async upsertMovies(rows) {
+        async upsertTvShows(rows) {
             if (rows.length === 0) return
             await db
-                .insert(movies)
+                .insert(tvShows)
                 .values(rows)
                 .onConflictDoUpdate({
-                    target: movies.tmdbId,
+                    target: tvShows.tmdbId,
                     set: {
                         title: sql`excluded.title`,
                         overview: sql`excluded.overview`,
@@ -182,20 +132,20 @@ function defaultDeps(): IngestDeps {
  * only the changed subset → upsert keyed on `tmdb_id`. Pure decision logic with
  * all IO behind `deps`, so re-running over the same catalog is a cheap no-op.
  */
-export async function ingestMovies(
-    details: MovieForIngest[],
-    deps: IngestDeps = defaultDeps(),
+export async function ingestTvShows(
+    details: TvForIngest[],
+    deps: TvIngestDeps = defaultDeps(),
 ): Promise<IngestStats> {
-    const preparedRaw = details.map(prepareMovie)
+    const preparedRaw = details.map(prepareTvShow)
     const invalid = preparedRaw.filter((p) => p === null).length
-    const prepared = dedupeByTmdbId(preparedRaw.filter((p): p is PreparedMovie => p !== null))
+    const prepared = dedupeByTmdbId(preparedRaw.filter((p): p is PreparedTvShow => p !== null))
 
     const existing = await deps.fetchExistingHashes(prepared.map((p) => p.tmdbId))
     const changed = prepared.filter((p) => existing.get(p.tmdbId) !== p.row.sourceHash)
 
     if (changed.length > 0) {
         const vectors = await deps.embed(changed.map((p) => p.sourceText))
-        const rows: MovieInsert[] = changed.map((p, i) => {
+        const rows: TvInsert[] = changed.map((p, i) => {
             const embedding = vectors[i]
             if (!embedding || embedding.length !== EMBEDDING_DIMENSIONS) {
                 throw new Error(
@@ -204,7 +154,7 @@ export async function ingestMovies(
             }
             return { ...p.row, embedding }
         })
-        await deps.upsertMovies(rows)
+        await deps.upsertTvShows(rows)
     }
 
     return {
@@ -217,7 +167,7 @@ export async function ingestMovies(
 }
 
 // Bounded-concurrency map; a single failed enrichment yields null rather than
-// aborting the whole run (one 404 shouldn't sink a 500-movie backfill).
+// aborting the whole run (one 404 shouldn't sink a 500-show backfill).
 async function mapWithConcurrency<T, R>(
     items: T[],
     fn: (item: T) => Promise<R>,
@@ -233,7 +183,7 @@ async function mapWithConcurrency<T, R>(
             try {
                 results[i] = await fn(items[i]!)
             } catch (err) {
-                console.error(`⚠️ Enrichment failed for item ${i}:`, err)
+                console.error(`⚠️ TV enrichment failed for item ${i}:`, err)
                 results[i] = null
             }
         }
@@ -244,10 +194,10 @@ async function mapWithConcurrency<T, R>(
 
 export type IngestMode = 'backfill' | 'incremental'
 
-export interface RunIngestOptions {
-    /** `backfill` = popularity-ordered catalog; `incremental` = now-playing. */
+export interface RunIngestTvOptions {
+    /** `backfill` = popularity-ordered catalog; `incremental` = popular feed. */
     mode?: IngestMode
-    /** How many catalog pages to pull (20 movies/page). */
+    /** How many catalog pages to pull (20 shows/page). */
     pages?: number
     /** First page number (1-based). */
     startPage?: number
@@ -256,33 +206,33 @@ export interface RunIngestOptions {
 }
 
 /**
- * End-to-end run: pull catalog pages → enrich each movie (detail + keywords) →
- * ingest. Backfill seeds the full catalog; incremental pulls fresh releases.
+ * End-to-end run: pull catalog pages → enrich each show (detail + keywords) →
+ * ingest. Backfill seeds the full catalog; incremental pulls the popular feed.
  */
-export async function runIngest(opts: RunIngestOptions = {}): Promise<IngestStats> {
+export async function runIngestTv(opts: RunIngestTvOptions = {}): Promise<IngestStats> {
     const { mode = 'backfill', pages = 1, startPage = 1, concurrency = 8 } = opts
-    const fetchPage = mode === 'incremental' ? getNowPlayingPage : discoverMoviePage
+    const fetchPage = mode === 'incremental' ? getPopularTvPage : discoverTvPage
 
     const summaries = []
     for (let i = 0; i < pages; i++) {
         const page = startPage + i
         const list = await fetchPage(page)
         summaries.push(...list)
-        console.log(`📃 ${mode} page ${page}: ${list.length} movies`)
+        console.log(`📃 TV ${mode} page ${page}: ${list.length} shows`)
     }
 
     const ids = [
         ...new Set(summaries.map((s) => s.id).filter((id): id is number => typeof id === 'number')),
     ]
-    console.log(`🎬 Enriching ${ids.length} movies (detail + keywords)…`)
-    const details = await mapWithConcurrency(ids, getMovieForIngest, concurrency)
+    console.log(`📺 Enriching ${ids.length} shows (detail + keywords)…`)
+    const details = await mapWithConcurrency(ids, getTvForIngest, concurrency)
 
-    const stats = await ingestMovies(details.filter((d): d is MovieForIngest => d !== null))
-    console.log('✅ Ingest complete:', stats)
+    const stats = await ingestTvShows(details.filter((d): d is TvForIngest => d !== null))
+    console.log('✅ TV ingest complete:', stats)
     return stats
 }
 
-// CLI entry: `bun run src/jobs/ingest.ts [--incremental] [--pages=N] [--start-page=N]`
+// CLI entry: `bun run src/jobs/ingest-tv.ts [--incremental] [--pages=N] [--start-page=N]`
 if (import.meta.main) {
     const args = process.argv.slice(2)
     const mode: IngestMode = args.includes('--incremental') ? 'incremental' : 'backfill'
@@ -291,14 +241,14 @@ if (import.meta.main) {
         return arg ? Number(arg.split('=')[1]) : fallback
     }
 
-    runIngest({
+    runIngestTv({
         mode,
         pages: numFlag('--pages=', 1),
         startPage: numFlag('--start-page=', 1),
     })
         .then(() => process.exit(0))
         .catch((err) => {
-            console.error('❌ Ingest failed:', err)
+            console.error('❌ TV ingest failed:', err)
             process.exit(1)
         })
 }

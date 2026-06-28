@@ -313,6 +313,45 @@ export const getTvExtras = (
         ),
     )
 
+// ── TV ingestion (Phase 10 — TV as first-class) ──────────────────────────────
+// The TV mirror of the movie ingest fetchers. `/discover/tv` (popularity-ordered)
+// seeds the catalog; `/tv/popular` is the "fresh" incremental feed (TV has no
+// "now playing"); the detail call appends keywords in one request. Genres arrive
+// as `{ id, name }[]` here, and keywords nest under `keywords.results` on the TV
+// endpoint (movies use `keywords.keywords`). These feed the ingestion pipeline,
+// not the live proxy — so unlike the proxy reads above, they ARE persisted.
+
+export type TvForIngest = TvDetailsResponse & {
+    keywords?: { results?: { id?: number; name?: string }[] }
+}
+
+export const discoverTvPage = async (
+    page: number,
+    cache: TmdbCache = redisCache,
+): Promise<TvListItem[]> => {
+    const data = await cached(cache, `discover:tv:popularity:${page}`, () =>
+        fetchFromTMDB<{ results?: TvListItem[] }>(
+            `/discover/tv?include_adult=false&language=en-US&sort_by=popularity.desc&page=${page}`,
+        ),
+    )
+    return data.results ?? []
+}
+
+export const getPopularTvPage = async (
+    page: number,
+    cache: TmdbCache = redisCache,
+): Promise<TvListItem[]> => {
+    const data = await cached(cache, `tv:popular:${page}`, () =>
+        fetchFromTMDB<{ results?: TvListItem[] }>(`/tv/popular?language=en-US&page=${page}`),
+    )
+    return data.results ?? []
+}
+
+export const getTvForIngest = (tvId: number, cache: TmdbCache = redisCache): Promise<TvForIngest> =>
+    cached(cache, `tv:${tvId}:ingest`, () =>
+        fetchFromTMDB<TvForIngest>(`/tv/${tvId}?language=en-US&append_to_response=keywords`),
+    )
+
 // ── Person lookups (Phase 9 — "movies starring X") ───────────────────────────
 // Find a person by name, then pull their movie filmography. Powers the agent's
 // find_movies_by_person tool. Both are cached like everything else.
