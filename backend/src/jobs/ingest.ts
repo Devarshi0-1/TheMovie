@@ -256,6 +256,48 @@ export interface RunIngestOptions {
 }
 
 /**
+ * Fetch `pages` catalog pages starting at `startPage`, collecting every list
+ * item. A page that fails AFTER its retry budget (a transient ECONNRESET / 5xx
+ * that outlived the backoff) is logged and SKIPPED rather than aborting the
+ * whole run — one flaky list page must not throw away an entire multi-hundred-
+ * page ingest. (Per-title enrichment is already resilient via
+ * `mapWithConcurrency`; this gives the page loop the same tolerance.) Skipped
+ * pages are summarized so the gap can be backfilled with `--start-page`.
+ * `fetchPage` is a parameter so the skip behavior is unit-testable offline.
+ */
+export async function collectCatalogPages<T>(
+    fetchPage: (page: number) => Promise<T[]>,
+    startPage: number,
+    pages: number,
+    label: string,
+    itemNoun: string,
+): Promise<T[]> {
+    const collected: T[] = []
+    let skipped = 0
+    for (let i = 0; i < pages; i++) {
+        const page = startPage + i
+        try {
+            const list = await fetchPage(page)
+            collected.push(...list)
+            console.log(`📃 ${label} page ${page}: ${list.length} ${itemNoun}`)
+        } catch (err) {
+            skipped++
+            console.error(
+                `⚠️ Skipping ${label} page ${page} (fetch failed after retries):`,
+                err instanceof Error ? err.message : err,
+            )
+        }
+    }
+    if (skipped > 0) {
+        console.warn(
+            `⚠️ ${skipped}/${pages} ${label} page(s) skipped after fetch failures — ` +
+                're-run with --start-page to backfill the gaps.',
+        )
+    }
+    return collected
+}
+
+/**
  * End-to-end run: pull catalog pages → enrich each movie (detail + keywords) →
  * ingest. Backfill seeds the full catalog; incremental pulls fresh releases.
  */
@@ -263,13 +305,7 @@ export async function runIngest(opts: RunIngestOptions = {}): Promise<IngestStat
     const { mode = 'backfill', pages = 1, startPage = 1, concurrency = 8 } = opts
     const fetchPage = mode === 'incremental' ? getNowPlayingPage : discoverMoviePage
 
-    const summaries = []
-    for (let i = 0; i < pages; i++) {
-        const page = startPage + i
-        const list = await fetchPage(page)
-        summaries.push(...list)
-        console.log(`📃 ${mode} page ${page}: ${list.length} movies`)
-    }
+    const summaries = await collectCatalogPages(fetchPage, startPage, pages, mode, 'movies')
 
     const ids = [
         ...new Set(summaries.map((s) => s.id).filter((id): id is number => typeof id === 'number')),

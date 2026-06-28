@@ -8,7 +8,7 @@ import {
     EMBEDDING_DIMENSIONS,
 } from '../lib/embeddings'
 import { discoverTvPage, getPopularTvPage, getTvForIngest, type TvForIngest } from '../lib/tmdb'
-import { capForEmbedding } from './ingest'
+import { capForEmbedding, collectCatalogPages } from './ingest'
 
 // The TV mirror of `ingest.ts` (Phase 10 — TV as first-class). Same idempotent
 // core — prepare → skip unchanged (by source hash) → embed only the changed
@@ -213,13 +213,7 @@ export async function runIngestTv(opts: RunIngestTvOptions = {}): Promise<Ingest
     const { mode = 'backfill', pages = 1, startPage = 1, concurrency = 8 } = opts
     const fetchPage = mode === 'incremental' ? getPopularTvPage : discoverTvPage
 
-    const summaries = []
-    for (let i = 0; i < pages; i++) {
-        const page = startPage + i
-        const list = await fetchPage(page)
-        summaries.push(...list)
-        console.log(`📃 TV ${mode} page ${page}: ${list.length} shows`)
-    }
+    const summaries = await collectCatalogPages(fetchPage, startPage, pages, `TV ${mode}`, 'shows')
 
     const ids = [
         ...new Set(summaries.map((s) => s.id).filter((id): id is number => typeof id === 'number')),

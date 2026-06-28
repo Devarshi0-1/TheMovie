@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import {
     chunkText,
+    collectCatalogPages,
     ingestMovies,
     prepareMovie,
     type IngestDeps,
@@ -47,6 +48,44 @@ const fakeDeps = (existing: Record<number, string> = {}) => {
     }
     return { deps, calls }
 }
+
+// ── collectCatalogPages (page-loop resilience) ───────────────────────────────
+describe('collectCatalogPages', () => {
+    // A fake page source: returns N items per page, but throws for pages listed
+    // in `failPages` (simulating a transient fetch failure that outlived retries).
+    const pageSource = (failPages: Set<number> = new Set(), perPage = 2) => {
+        const seen: number[] = []
+        const fetchPage = async (page: number) => {
+            seen.push(page)
+            if (failPages.has(page)) throw new Error(`ECONNRESET on page ${page}`)
+            return Array.from({ length: perPage }, (_, i) => ({ id: page * 100 + i }))
+        }
+        return { fetchPage, seen }
+    }
+
+    it('collects every item across pages, honoring startPage (feature)', async () => {
+        const { fetchPage, seen } = pageSource()
+        const out = await collectCatalogPages(fetchPage, 3, 4, 'backfill', 'movies')
+        expect(seen).toEqual([3, 4, 5, 6]) // startPage=3, pages=4
+        expect(out).toHaveLength(8) // 4 pages × 2 items
+        expect(out.map((i) => i.id)).toContain(300)
+    })
+
+    it('skips a page that fails and keeps going, returning the rest (feature: resilience)', async () => {
+        // Page 2 blows up; pages 1 and 3 must still be collected.
+        const { fetchPage, seen } = pageSource(new Set([2]))
+        const out = await collectCatalogPages(fetchPage, 1, 3, 'backfill', 'movies')
+        expect(seen).toEqual([1, 2, 3]) // it did not abort on page 2
+        expect(out).toHaveLength(4) // pages 1 + 3 only (2 items each)
+        expect(out.map((i) => i.id).sort((a, b) => a - b)).toEqual([100, 101, 300, 301])
+    })
+
+    it('returns [] (never throws) when every page fails (edge: total outage)', async () => {
+        const { fetchPage } = pageSource(new Set([1, 2]))
+        const out = await collectCatalogPages(fetchPage, 1, 2, 'TV backfill', 'shows')
+        expect(out).toEqual([])
+    })
+})
 
 // ── chunkText ────────────────────────────────────────────────────────────────
 describe('chunkText', () => {
