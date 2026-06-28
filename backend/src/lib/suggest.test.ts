@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'bun:test'
 import type { MovieResult } from '@themovie/schemas'
-import { SUGGEST_LIMIT, suggestMovies, type SuggestDeps } from './suggest'
+import {
+    SUGGEST_LIMIT,
+    suggestAll,
+    suggestMovies,
+    suggestTvShows,
+    type SuggestDeps,
+} from './suggest'
 
 const movie = (tmdbId: number, title: string): MovieResult => ({
     tmdbId,
@@ -9,6 +15,11 @@ const movie = (tmdbId: number, title: string): MovieResult => ({
     releaseDate: null,
     genres: [],
     posterPath: null,
+})
+
+const show = (tmdbId: number, title: string): MovieResult => ({
+    ...movie(tmdbId, title),
+    mediaType: 'tv',
 })
 
 function deps(over: Partial<SuggestDeps> = {}): SuggestDeps {
@@ -113,5 +124,61 @@ describe('suggestMovies', () => {
             }),
         )
         expect(result).toEqual([])
+    })
+})
+
+describe('suggestTvShows', () => {
+    // Shares the merge core with suggestMovies; verify it blends + dedupes the
+    // same way and that results carry the TV mediaType through.
+    it('returns local TV hits first, then TMDB fills the rest', async () => {
+        const result = await suggestTvShows(
+            'breaking',
+            deps({
+                localSearch: async () => [show(1, 'Breaking Bad')],
+                tmdbSearch: async () => [show(2, 'Breaking Pointe')],
+            }),
+        )
+        expect(result.map((m) => m.tmdbId)).toEqual([1, 2])
+        expect(result.every((m) => m.mediaType === 'tv')).toBe(true)
+    })
+
+    it('returns an empty list for a blank query', async () => {
+        const result = await suggestTvShows('   ', deps())
+        expect(result).toEqual([])
+    })
+})
+
+describe('suggestAll', () => {
+    // ── Feature / happy path ──────────────────────────────────────────────
+    it('groups movies and TV shows in one call', async () => {
+        const result = await suggestAll('matrix', {
+            movies: deps({ localSearch: async () => [movie(1, 'The Matrix')] }),
+            tv: deps({ localSearch: async () => [show(10, 'The Matrix (series)')] }),
+        })
+        expect(result.movies.map((m) => m.tmdbId)).toEqual([1])
+        expect(result.tv.map((m) => m.tmdbId)).toEqual([10])
+        expect(result.tv[0]!.mediaType).toBe('tv')
+    })
+
+    // ── Edge cases ────────────────────────────────────────────────────────
+    it('degrades one group to [] without affecting the other', async () => {
+        const result = await suggestAll('a', {
+            movies: deps({ localSearch: async () => [movie(1, 'Local Movie')] }),
+            tv: deps({
+                localSearch: async () => {
+                    throw new Error('tv db down')
+                },
+                tmdbSearch: async () => {
+                    throw new Error('tv tmdb down')
+                },
+            }),
+        })
+        expect(result.movies.map((m) => m.tmdbId)).toEqual([1])
+        expect(result.tv).toEqual([])
+    })
+
+    it('returns empty groups for a blank query', async () => {
+        const result = await suggestAll('  ', { movies: deps(), tv: deps() })
+        expect(result).toEqual({ movies: [], tv: [] })
     })
 })
