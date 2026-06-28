@@ -10,6 +10,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useFocusOnNavigate } from '../lib/navigation'
 import { AppSidebar } from './AppSidebar'
+import { CommandSearch } from './CommandSearch'
 import { SessionActions } from './SessionActions'
 
 // The current page's breadcrumb label, derived from the path's first segment.
@@ -54,7 +55,8 @@ export function AppShell() {
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
-                        <div className="ml-auto">
+                        <div className="ml-auto flex items-center gap-2">
+                            <CommandSearch />
                             <SessionActions />
                         </div>
                     </header>
