@@ -64,7 +64,7 @@ interface MovieRow {
     posterPath: string | null
 }
 
-function rowToMovieResult(row: MovieRow): MovieResult {
+export function rowToMovieResult(row: MovieRow): MovieResult {
     return {
         tmdbId: row.tmdbId,
         title: row.title,
@@ -222,7 +222,10 @@ const RRF_K = 60
  * tmdbId; the reported `similarity` is the best (max) cosine an item achieved in
  * any ranking (kept meaningful), while ORDER follows the fused score.
  */
-function fuseByReciprocalRank(rankings: ScoredMovieResult[][], limit: number): ScoredMovieResult[] {
+export function fuseByReciprocalRank(
+    rankings: ScoredMovieResult[][],
+    limit: number,
+): ScoredMovieResult[] {
     const acc = new Map<number, { movie: ScoredMovieResult; rrf: number; bestSim: number }>()
     for (const ranking of rankings) {
         ranking.forEach((movie, idx) => {

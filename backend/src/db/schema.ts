@@ -214,6 +214,52 @@ export const movies = pgTable(
     ],
 )
 
+// Local catalog of TV shows — the TV mirror of `movies` (Phase 10). TV is now a
+// first-class, ingested + embedded media type (not just a TMDB proxy): the same
+// pipeline pulls TMDB `/tv/*` data, embeds plot + audience-reception text, and
+// persists it here so semantic search, summaries, and the agent treat shows and
+// films alike. Columns/indexes intentionally mirror `movies` 1:1 — TMDB's `name`
+// maps to `title` and `first_air_date` to `releaseDate`, so the shared
+// MovieResult shape and all downstream catalog code apply unchanged.
+export const tvShows = pgTable(
+    'tv_shows',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => crypto.randomUUID()),
+        tmdbId: integer('tmdb_id').notNull().unique(),
+        title: text('title').notNull(),
+        overview: text('overview'),
+        posterPath: text('poster_path'),
+        backdropPath: text('backdrop_path'),
+        releaseDate: text('release_date'),
+        genres: jsonbNative<string[]>('genres'),
+        keywords: jsonbNative<string[]>('keywords'),
+        metadata: jsonbNative<unknown>('metadata'),
+        embedding: vector('embedding', { dimensions: 1536 }),
+        sourceHash: text('source_hash'),
+        reviewSummary: jsonbNative<unknown>('review_summary'),
+        reviewSummaryEmbedding: vector('review_summary_embedding', { dimensions: 1536 }),
+        reviewSummaryHash: text('review_summary_hash'),
+        reviewCountAtSummary: integer('review_count_at_summary'),
+        reviewSummaryAt: tstz('review_summary_at'),
+        createdAt: tstz('created_at').notNull().defaultNow(),
+        updatedAt: tstz('updated_at')
+            .notNull()
+            .defaultNow()
+            .$onUpdate(() => new Date()),
+    },
+    (t) => [
+        index('tv_shows_genres_gin_idx').using('gin', t.genres),
+        index('tv_shows_embedding_hnsw_idx').using('hnsw', t.embedding.op('vector_cosine_ops')),
+        index('tv_shows_review_summary_embedding_hnsw_idx').using(
+            'hnsw',
+            t.reviewSummaryEmbedding.op('vector_cosine_ops'),
+        ),
+        index('tv_shows_review_summary_at_idx').on(t.reviewSummaryAt),
+    ],
+)
+
 // Per-user chat conversations — the multi-turn memory behind the agent. Each
 // request loads the conversation's prior messages so the agent has context
 // ("the sci-fi one we discussed"); new turns are appended via streamText's
