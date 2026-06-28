@@ -2,9 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { MovieGrid } from '../components/MovieGrid'
+import { SearchBox } from '../components/SearchBox'
 import { searchTvQueryOptions, trendingTvQueryOptions } from '../lib/movies'
 
 // `?q=` drives search; absent → trending TV. Trending is SSR-prefetched in the
@@ -28,8 +27,7 @@ function TvBrowse() {
     const committed = q?.trim() ?? ''
     const isSearching = committed.length > 0
 
-    function commit(e: React.FormEvent) {
-        e.preventDefault()
+    function commit() {
         const next = draft.trim()
         void navigate({ search: next ? { q: next } : {} })
     }
@@ -51,24 +49,16 @@ function TvBrowse() {
                 <p className="mb-6 max-w-[56ch] text-lg leading-relaxed text-muted-foreground">
                     What’s trending in TV right now, plus full-text search across TMDB’s catalog.
                 </p>
-                <search>
-                    <form onSubmit={commit} className="flex max-w-[560px] items-center gap-2">
-                        <label className="sr-only" htmlFor="tv-search">
-                            Search TV shows
-                        </label>
-                        <Input
-                            id="tv-search"
-                            type="search"
-                            value={draft}
-                            onChange={(e) => handleChange(e.target.value)}
-                            placeholder="Search TV shows…"
-                            autoComplete="off"
-                        />
-                        <Button type="submit" disabled={isSearching && search.isFetching}>
-                            {isSearching && search.isFetching ? 'Searching…' : 'Search'}
-                        </Button>
-                    </form>
-                </search>
+                <div className="max-w-[560px]">
+                    <SearchBox
+                        value={draft}
+                        onChange={handleChange}
+                        onSubmit={commit}
+                        scope="tv"
+                        busy={isSearching && search.isFetching}
+                        placeholder="Search TV shows…"
+                    />
+                </div>
             </header>
 
             <section aria-label={isSearching ? 'Search results' : 'Trending TV shows'}>

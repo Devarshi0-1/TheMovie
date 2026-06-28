@@ -2,11 +2,12 @@ import { Hono } from 'hono'
 import { MovieIdSchema } from '@themovie/schemas'
 import { getTrendingTv, getTvDetails, getTvExtras, searchTv } from '../lib/tmdb'
 import { DEFAULT_WATCH_REGION, toTvDetailView, toTvExtrasView, toTvResults } from '../lib/movieView'
+import { suggestTvShows } from '../lib/suggest'
 
-// TV endpoints mirror the movie endpoints but proxy TMDB's `/tv/*` routes and map
-// onto the SAME shared shapes (with mediaType: 'tv'), so the frontend reuses one
-// card/detail UI. TV is NOT ingested/embedded — there's no DB/agent involvement,
-// so no semantic search or summaries here (deliberate cost choice).
+// TV endpoints mirror the movie endpoints, proxying TMDB's `/tv/*` routes and
+// mapping onto the SAME shared shapes (with mediaType: 'tv'), so the frontend
+// reuses one card/detail UI. As of Phase 10 TV is ingested + embedded, so
+// `/suggest` blends the local `tv_shows` catalog with TMDB typeahead.
 
 const tvRoute = new Hono()
 
@@ -35,6 +36,24 @@ tvRoute.get('/search', async (c) => {
     } catch (error) {
         console.error('Error searching TV:', error)
         return c.json({ error: 'Failed to fetch TV search results' }, 500)
+    }
+})
+
+// Typeahead suggestions for the TV search box: local catalog + TMDB, deduped.
+// A blank query returns an empty list (200), not a 400 — the box queries as the
+// user types and an empty box simply has nothing to suggest.
+tvRoute.get('/suggest', async (c) => {
+    try {
+        const query = c.req.query('q')?.trim()
+        if (!query) return c.json([])
+        if (query.length > 200) {
+            return c.json({ error: 'Query is too long (max 200 characters)' }, 400)
+        }
+
+        return c.json(await suggestTvShows(query))
+    } catch (error) {
+        console.error('Error fetching TV suggestions:', error)
+        return c.json({ error: 'Failed to fetch suggestions' }, 500)
     }
 })
 

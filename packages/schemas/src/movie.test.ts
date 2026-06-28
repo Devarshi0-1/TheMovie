@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test'
 import {
     FetchFromTmdbInputSchema,
     FindMoviesByPersonInputSchema,
+    GroupedSuggestionsSchema,
     MovieDetailsInputSchema,
     MovieExtrasSchema,
     MovieResultSchema,
@@ -56,6 +57,22 @@ describe('MovieResultSchema', () => {
         expect(MovieResultSchema.parse(valid).mediaType).toBeUndefined()
         // Only 'movie' | 'tv' are allowed.
         expect(() => MovieResultSchema.parse({ ...valid, mediaType: 'podcast' })).toThrow()
+    })
+
+    it('GroupedSuggestionsSchema parses movies + tv groups (feature: multi-suggest)', () => {
+        const parsed = GroupedSuggestionsSchema.parse({
+            movies: [valid],
+            tv: [{ ...valid, tmdbId: 2, mediaType: 'tv' }],
+        })
+        expect(parsed.movies).toHaveLength(1)
+        expect(parsed.tv[0]!.mediaType).toBe('tv')
+    })
+
+    it('GroupedSuggestionsSchema accepts empty groups (edge: blank query)', () => {
+        expect(GroupedSuggestionsSchema.parse({ movies: [], tv: [] })).toEqual({
+            movies: [],
+            tv: [],
+        })
     })
 })
 

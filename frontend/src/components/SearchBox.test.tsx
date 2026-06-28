@@ -1,4 +1,4 @@
-import type { MovieResult } from '@themovie/schemas'
+import type { GroupedSuggestions, MovieResult } from '@themovie/schemas'
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { makeTestQueryClient, renderWithProviders } from '../test/providers'
@@ -11,13 +11,31 @@ const suggestion: MovieResult = {
     releaseDate: '1999-03-31',
     genres: [],
     posterPath: '/matrix.jpg',
+    mediaType: 'movie',
 }
 
-// Seed the suggest cache for a query so the dropdown renders without a network
-// call (the query is fresh for 5 min, so the queryFn never runs).
-function seeded(query: string, movies: MovieResult[]) {
+const tvSuggestion: MovieResult = {
+    tmdbId: 1396,
+    title: 'Breaking Bad',
+    overview: null,
+    releaseDate: '2008-01-20',
+    genres: [],
+    posterPath: '/bb.jpg',
+    mediaType: 'tv',
+}
+
+// Seed the grouped multi-suggest cache for a query so the dropdown renders
+// without a network call (fresh for 5 min, so the queryFn never runs).
+function seeded(query: string, groups: GroupedSuggestions) {
     const qc = makeTestQueryClient()
-    qc.setQueryData(['movies', 'suggest', query], movies)
+    qc.setQueryData(['search', 'suggest', query], groups)
+    return qc
+}
+
+// TV-scoped suggest seeds a flat MovieResult[] under the tv suggest key.
+function seededTv(query: string, shows: MovieResult[]) {
+    const qc = makeTestQueryClient()
+    qc.setQueryData(['tv', 'suggest', query], shows)
     return qc
 }
 
@@ -59,7 +77,7 @@ describe('<SearchBox />', () => {
     it('shows matching suggestions once the field is focused, linking to detail', async () => {
         renderWithProviders(
             <SearchBox value="matrix" onChange={() => {}} onSubmit={() => {}} />,
-            seeded('matrix', [suggestion]),
+            seeded('matrix', { movies: [suggestion], tv: [] }),
         )
         // Closed until the field is focused.
         const input = await screen.findByRole('searchbox')
@@ -71,10 +89,40 @@ describe('<SearchBox />', () => {
         expect(screen.getByText('1999')).toBeInTheDocument()
     })
 
+    it('groups Movies and TV Shows, routing a TV pick to /tv/:id (feature)', async () => {
+        renderWithProviders(
+            <SearchBox value="break" onChange={() => {}} onSubmit={() => {}} />,
+            seeded('break', { movies: [suggestion], tv: [tvSuggestion] }),
+        )
+        fireEvent.focus(await screen.findByRole('searchbox'))
+        // Both group headings render.
+        expect(screen.getByRole('heading', { name: 'Movies' })).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'TV Shows' })).toBeInTheDocument()
+        // The TV result routes to the TV detail page.
+        expect(screen.getByRole('link', { name: /Breaking Bad/ })).toHaveAttribute(
+            'href',
+            '/tv/1396',
+        )
+    })
+
+    it('scope="tv" suggests TV shows only, from the tv suggest source (feature)', async () => {
+        renderWithProviders(
+            <SearchBox value="break" onChange={() => {}} onSubmit={() => {}} scope="tv" />,
+            seededTv('break', [tvSuggestion]),
+        )
+        fireEvent.focus(await screen.findByRole('searchbox'))
+        expect(screen.getByRole('link', { name: /Breaking Bad/ })).toHaveAttribute(
+            'href',
+            '/tv/1396',
+        )
+        // No Movies group in TV scope.
+        expect(screen.queryByRole('heading', { name: 'Movies' })).not.toBeInTheDocument()
+    })
+
     it('does not suggest for a one-character query (edge: below the floor)', async () => {
         renderWithProviders(
             <SearchBox value="m" onChange={() => {}} onSubmit={() => {}} />,
-            seeded('m', [suggestion]),
+            seeded('m', { movies: [suggestion], tv: [] }),
         )
         fireEvent.focus(await screen.findByRole('searchbox'))
         expect(screen.queryByText('The Matrix')).not.toBeInTheDocument()

@@ -41,6 +41,19 @@ export const ScoredMovieResultSchema = MovieResultSchema.extend({
 })
 export type ScoredMovieResult = z.infer<typeof ScoredMovieResultSchema>
 
+/**
+ * The multi-suggest payload: typeahead matches split into Movies and TV Shows
+ * groups (the response shape of `GET /api/v1/search/suggest`). Each group is an
+ * independent, already-deduped, already-capped `MovieResult[]` carrying its own
+ * `mediaType`, so the search UI can render two labelled sections and route each
+ * card to `/movie/:id` or `/tv/:id`.
+ */
+export const GroupedSuggestionsSchema = z.object({
+    movies: z.array(MovieResultSchema),
+    tv: z.array(MovieResultSchema),
+})
+export type GroupedSuggestions = z.infer<typeof GroupedSuggestionsSchema>
+
 /** Full movie details (superset of MovieResult) for the details tool. */
 export const MovieDetailsResultSchema = MovieResultSchema.extend({
     tagline: z.string().nullable(),

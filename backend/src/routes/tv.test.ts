@@ -28,4 +28,23 @@ describe('tv route input validation', () => {
         const res = await tvRoute.request('/abc/extras')
         expect(res.status).toBe(400)
     })
+
+    // /suggest mirrors the movie route: a blank/omitted query returns an empty
+    // list (200) before any DB/TMDB call; only an abusive over-long query 400s.
+    it('returns an empty list for a blank suggest query (edge, no network)', async () => {
+        const res = await tvRoute.request('/suggest?q=%20%20')
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual([])
+    })
+
+    it('returns an empty list when the suggest query is omitted (edge)', async () => {
+        const res = await tvRoute.request('/suggest')
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual([])
+    })
+
+    it('rejects an over-long suggest query (edge: bounded input)', async () => {
+        const res = await tvRoute.request('/suggest?q=' + 'a'.repeat(201))
+        expect(res.status).toBe(400)
+    })
 })

@@ -13,6 +13,7 @@ import moviesRoute from './routes/movies'
 import tvRoute from './routes/tv'
 import recommendationsRoute from './routes/recommendations'
 import reviewsRoute from './routes/reviews'
+import searchRoute from './routes/search'
 import watchlistRoute from './routes/watchlist'
 
 export const app = new Hono()
@@ -67,6 +68,7 @@ app.get('/api/me', async (c) => {
 
 app.route('/api/v1/movies', moviesRoute)
 app.route('/api/v1/tv', tvRoute)
+app.route('/api/v1/search', searchRoute)
 app.route('/api/v1/chat', chatRoute)
 app.route('/api/v1/watchlist', watchlistRoute)
 app.route('/api/v1/reviews', reviewsRoute)

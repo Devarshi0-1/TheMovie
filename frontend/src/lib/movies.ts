@@ -1,9 +1,11 @@
 import { queryOptions } from '@tanstack/react-query'
 import {
+    GroupedSuggestionsSchema,
     MovieDetailViewSchema,
     MovieExtrasSchema,
     MovieResultSchema,
     ReviewSummarySchema,
+    type GroupedSuggestions,
     type MovieDetailView,
     type MovieExtras,
     type MovieResult,
@@ -111,17 +113,24 @@ export function discoverByGenreQueryOptions(genreId: number | undefined) {
     })
 }
 
-export async function fetchSuggestions(query: string): Promise<MovieResult[]> {
-    return parseMovies(await apiFetch(`/api/v1/movies/suggest?q=${encodeURIComponent(query)}`))
+/**
+ * Grouped multi-suggest: Movies + TV shows in one call, each pre-deduped and
+ * mediaType-tagged. Powers the app-wide search (navbar palette + discovery box)
+ * so a single keystroke surfaces both media types without two round-trips. Only
+ * suggests once there's something to match; results stay briefly warm so
+ * backspacing/retyping doesn't refetch (the endpoint blends PG + TMDB).
+ */
+export async function fetchGroupedSuggestions(query: string): Promise<GroupedSuggestions> {
+    return GroupedSuggestionsSchema.parse(
+        await apiFetch(`/api/v1/search/suggest?q=${encodeURIComponent(query)}`),
+    )
 }
 
-export function suggestMoviesQueryOptions(query: string) {
+export function suggestAllQueryOptions(query: string) {
     const q = query.trim()
     return queryOptions({
-        queryKey: ['movies', 'suggest', q] as const,
-        queryFn: () => fetchSuggestions(q),
-        // Only suggest once there's something to match; keep results briefly warm
-        // so backspacing/retyping doesn't refetch (the endpoint blends PG + TMDB).
+        queryKey: ['search', 'suggest', q] as const,
+        queryFn: () => fetchGroupedSuggestions(q),
         enabled: q.length >= 2,
         staleTime: 5 * 60_000,
     })
@@ -151,6 +160,20 @@ export function searchTvQueryOptions(query: string) {
         queryKey: ['tv', 'search', q] as const,
         queryFn: () => searchTv(q),
         enabled: q.length > 0,
+    })
+}
+
+export async function fetchTvSuggestions(query: string): Promise<MovieResult[]> {
+    return parseMovies(await apiFetch(`/api/v1/tv/suggest?q=${encodeURIComponent(query)}`))
+}
+
+export function suggestTvQueryOptions(query: string) {
+    const q = query.trim()
+    return queryOptions({
+        queryKey: ['tv', 'suggest', q] as const,
+        queryFn: () => fetchTvSuggestions(q),
+        enabled: q.length >= 2,
+        staleTime: 5 * 60_000,
     })
 }
 
