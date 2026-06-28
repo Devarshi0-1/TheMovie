@@ -19,6 +19,7 @@ import type {
     TrendingInput,
 } from '@themovie/schemas'
 import {
+    aboveFloor,
     escapeLike,
     fuseByReciprocalRank,
     rowToMovieResult,
@@ -163,15 +164,16 @@ export async function semanticSearchTv(
     const vector = await deps.embedQuery(input.query)
     const mode = input.mode ?? 'both'
 
-    if (mode === 'plot') return deps.knnSearch(vector, input.limit, 'plot')
-    if (mode === 'reception') return deps.knnSearch(vector, input.limit, 'reception')
+    if (mode === 'plot') return aboveFloor(await deps.knnSearch(vector, input.limit, 'plot'))
+    if (mode === 'reception')
+        return aboveFloor(await deps.knnSearch(vector, input.limit, 'reception'))
 
     const pool = Math.min(20, input.limit * 2)
     const [plot, reception] = await Promise.all([
         deps.knnSearch(vector, pool, 'plot'),
         deps.knnSearch(vector, pool, 'reception'),
     ])
-    return fuseByReciprocalRank([plot, reception], input.limit)
+    return fuseByReciprocalRank([aboveFloor(plot), aboveFloor(reception)], input.limit)
 }
 
 /** Tier 3 — last-resort TMDB lookup; writes back so the TV catalog self-heals. */

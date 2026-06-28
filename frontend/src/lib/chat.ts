@@ -1,4 +1,9 @@
-import { MovieResultSchema, type ManageWatchlistInput, type MovieResult } from '@themovie/schemas'
+import {
+    MovieResultSchema,
+    SEMANTIC_MATCH_FLOOR,
+    type ManageWatchlistInput,
+    type MovieResult,
+} from '@themovie/schemas'
 import { DefaultChatTransport, type UIDataTypes, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { API_BASE, apiFetch } from './api'
@@ -78,12 +83,14 @@ export const TOOL_LABELS: Record<string, { running: string; done: string }> = {
     summarize_reviews: { running: 'Summarizing reviews', done: 'Summarized reviews' },
     get_user_watchlist: { running: 'Reading your watchlist', done: 'Read your watchlist' },
     get_recommendations: { running: 'Building recommendations', done: 'Built recommendations' },
+    find_similar_movies: { running: 'Finding similar movies', done: 'Found similar movies' },
     // TV parity (Phase 10.4) — same trail, over the TV catalog.
     search_tv_sql: { running: 'Searching TV shows', done: 'Searched TV shows' },
     semantic_search_tv: { running: 'Searching TV by theme', done: 'Searched TV by theme' },
     fetch_tv_from_tmdb: { running: 'Checking TMDB for TV', done: 'Checked TMDB for TV' },
     get_trending_tv: { running: 'Loading trending TV', done: 'Loaded trending TV' },
     summarize_tv_reviews: { running: 'Summarizing TV reviews', done: 'Summarized TV reviews' },
+    find_similar_tv: { running: 'Finding similar shows', done: 'Found similar shows' },
 }
 
 export function toolLabel(name: string, done: boolean): string {
@@ -95,40 +102,84 @@ export function toolLabel(name: string, done: boolean): string {
 
 // ── Suggested movies (chat result cards) ─────────────────────────────────────
 // The retrieval tools (search/semantic/tmdb/person/similar/trending/details)
-// return movies as their tool output. We harvest those so the chat can render
+// return titles as their tool output. We harvest those so the chat can render
 // the agent's picks as clickable cards instead of leaving them buried in prose.
-// Non-movie tool outputs (review summaries, watch providers) simply don't parse
-// as a movie and are skipped; manage_watchlist is excluded explicitly.
+// Non-title tool outputs (review summaries, watch providers) simply don't parse
+// as a title and are skipped; manage_watchlist is excluded explicitly.
 
-const MovieArraySchema = z.array(MovieResultSchema)
+// Keep `similarity` when present (semantic-search hits carry it) so the strip can
+// drop weak matches; the plain MovieResultSchema would silently strip it.
+const SuggestedMovieSchema = MovieResultSchema.extend({ similarity: z.number().optional() })
+type SuggestedMovie = z.infer<typeof SuggestedMovieSchema>
+const SuggestedArraySchema = z.array(SuggestedMovieSchema)
 const SUGGESTED_MOVIES_CAP = 12
 
-function moviesFromOutput(output: unknown): MovieResult[] {
-    const asArray = MovieArraySchema.safeParse(output)
+function moviesFromOutput(output: unknown): SuggestedMovie[] {
+    const asArray = SuggestedArraySchema.safeParse(output)
     if (asArray.success) return asArray.data
-    const asSingle = MovieResultSchema.safeParse(output)
+    const asSingle = SuggestedMovieSchema.safeParse(output)
     return asSingle.success ? [asSingle.data] : []
 }
 
+/** Concatenate a message's text parts (ignoring tool/reasoning/file parts). */
+export function messageText(message: AppUIMessage): string {
+    return message.parts
+        .filter(
+            (p): p is { type: 'text'; text: string } =>
+                p.type === 'text' && typeof (p as { text?: unknown }).text === 'string',
+        )
+        .map((p) => p.text)
+        .join(' ')
+        .trim()
+}
+
+/** Dedupe key: a film and a show can share a TMDB id, so scope it by media. */
+const suggestionKey = (m: MovieResult) => `${m.mediaType ?? 'movie'}:${m.tmdbId}`
+
 /**
- * The distinct movies an assistant turn surfaced across its tool calls, in call
- * order, deduped by tmdbId and capped. Empty for user turns or a turn that ran
- * no movie-returning tool — so the caller renders the card strip only when there
- * is something to show.
+ * True when a result is the very title the user named in their query (e.g. a
+ * "shows like Game of Thrones" search returning Game of Thrones itself). We drop
+ * those — recommending back the thing they asked about is noise. Matched as a
+ * normalized substring so "game of thrones" in the query catches the card.
  */
-export function extractSuggestedMovies(message: AppUIMessage): MovieResult[] {
+function isNamedInQuery(title: string, query: string | undefined): boolean {
+    if (!query) return false
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+    const t = norm(title)
+    // Guard against trivially-short titles matching half the sentence.
+    return t.length >= 3 && norm(query).includes(t)
+}
+
+/**
+ * The distinct titles an assistant turn surfaced across its tool calls, in call
+ * order, deduped by (mediaType, tmdbId) and capped. Filters out (1) weak
+ * semantic matches below the shared similarity floor and (2) the title the user
+ * named in `queryText`, so the card strip shows real, non-redundant suggestions
+ * rather than the raw retrieval set. Empty for user turns or a turn that ran no
+ * title-returning tool — so the caller renders the strip only when there's
+ * something worth showing.
+ */
+export function extractSuggestedMovies(message: AppUIMessage, queryText?: string): MovieResult[] {
     if (message.role !== 'assistant') return []
 
-    const seen = new Set<number>()
+    const seen = new Set<string>()
     const out: MovieResult[] = []
     for (const part of message.parts) {
         if (!isToolPart(part) || part.state !== 'output-available') continue
         if (toolNameOf(part) === MANAGE_WATCHLIST) continue
         for (const movie of moviesFromOutput(part.output)) {
             if (out.length >= SUGGESTED_MOVIES_CAP) break
-            if (seen.has(movie.tmdbId)) continue
-            seen.add(movie.tmdbId)
-            out.push(movie)
+            // Drop weak semantic hits; unscored (exact/curated/trending) results
+            // have no `similarity` and always pass.
+            if (typeof movie.similarity === 'number' && movie.similarity < SEMANTIC_MATCH_FLOOR)
+                continue
+            if (isNamedInQuery(movie.title, queryText)) continue
+            const key = suggestionKey(movie)
+            if (seen.has(key)) continue
+            seen.add(key)
+            // Strip the internal `similarity` field from the card model.
+            const { similarity: _omit, ...card } = movie
+            out.push(card)
         }
     }
     return out

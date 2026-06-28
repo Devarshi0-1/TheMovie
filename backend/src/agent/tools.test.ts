@@ -8,6 +8,7 @@ describe('retrievalTools', () => {
             'fetch_tv_from_tmdb',
             'find_movies_by_person',
             'find_similar_movies',
+            'find_similar_tv',
             'get_movie_details',
             'get_trending',
             'get_trending_tv',
@@ -47,6 +48,13 @@ describe('retrievalTools', () => {
         expect(retrievalTools.semantic_search_tv.description?.toLowerCase()).toContain('semantic')
         expect(retrievalTools.fetch_tv_from_tmdb.description).toContain('LAST RESORT')
         expect(retrievalTools.summarize_tv_reviews.description).toContain('TV')
+    })
+
+    it('find_similar_tv is steered as the BEST tool for "shows like X" (feature: similarity)', () => {
+        const desc = retrievalTools.find_similar_tv.description ?? ''
+        expect(desc).toContain('BEST')
+        expect(desc.toLowerCase()).toContain('like')
+        expect(desc).toContain('search_tv_sql') // resolve the id first
     })
 })
 

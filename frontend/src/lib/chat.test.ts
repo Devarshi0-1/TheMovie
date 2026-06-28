@@ -6,6 +6,7 @@ import {
     isToolPart,
     loadStoredConversationId,
     MANAGE_WATCHLIST,
+    messageText,
     newConversationId,
     storeConversationId,
     toolLabel,
@@ -117,6 +118,93 @@ describe('extractSuggestedMovies', () => {
             parts: [{ type: 'text', text: 'hi' }],
         } as unknown as AppUIMessage)
         expect(userTurn).toEqual([])
+    })
+
+    // ── Quality filtering (suggestion-strip cleanup) ──────────────────────────
+    it('drops semantic hits below the similarity floor (feature: no junk cards)', () => {
+        const movies = extractSuggestedMovies(
+            assistant([
+                {
+                    type: 'tool-semantic_search_tv',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: [
+                        { ...aMovie(1, 'House of the Dragon'), mediaType: 'tv', similarity: 0.46 },
+                        { ...aMovie(2, 'The Simpsons'), mediaType: 'tv', similarity: 0.17 },
+                    ],
+                },
+            ]),
+        )
+        // The strong match stays; the 0.17 noise is filtered out.
+        expect(movies.map((m) => m.title)).toEqual(['House of the Dragon'])
+    })
+
+    it('keeps unscored exact/curated results regardless of floor (edge)', () => {
+        const movies = extractSuggestedMovies(
+            assistant([
+                {
+                    type: 'tool-search_tv_sql',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: [{ ...aMovie(1, 'Bones'), mediaType: 'tv' }], // no similarity field
+                },
+            ]),
+        )
+        expect(movies.map((m) => m.title)).toEqual(['Bones'])
+    })
+
+    it('drops the title the user named in their query (feature: no self-recommend)', () => {
+        const movies = extractSuggestedMovies(
+            assistant([
+                {
+                    type: 'tool-semantic_search_tv',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: [
+                        { ...aMovie(1, 'Game of Thrones'), mediaType: 'tv', similarity: 0.5 },
+                        { ...aMovie(2, 'House of the Dragon'), mediaType: 'tv', similarity: 0.45 },
+                    ],
+                },
+            ]),
+            'Best TV shows like Game of Thrones',
+        )
+        // GoT itself is removed; the genuine suggestion remains.
+        expect(movies.map((m) => m.title)).toEqual(['House of the Dragon'])
+    })
+
+    it('does not dedupe a movie and a show sharing a tmdb id (edge: cross-media key)', () => {
+        const movies = extractSuggestedMovies(
+            assistant([
+                {
+                    type: 'tool-search_movies_sql',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: [aMovie(1396, 'A Movie')],
+                },
+                {
+                    type: 'tool-search_tv_sql',
+                    toolCallId: 't2',
+                    state: 'output-available',
+                    output: [{ ...aMovie(1396, 'A Show'), mediaType: 'tv' }],
+                },
+            ]),
+        )
+        expect(movies.map((m) => m.title)).toEqual(['A Movie', 'A Show'])
+    })
+})
+
+describe('messageText', () => {
+    it('joins text parts and ignores tool/reasoning parts (feature)', () => {
+        const msg = {
+            id: 'u',
+            role: 'user',
+            parts: [
+                { type: 'text', text: 'shows like' },
+                { type: 'tool-search_tv_sql', toolCallId: 't', state: 'input-available' },
+                { type: 'text', text: 'Game of Thrones' },
+            ],
+        } as unknown as AppUIMessage
+        expect(messageText(msg)).toBe('shows like Game of Thrones')
     })
 })
 

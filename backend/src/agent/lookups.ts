@@ -5,14 +5,16 @@ import type {
     WatchProviders,
     WatchProvidersInput,
 } from '@themovie/schemas'
-import { toMovieExtrasView, toMovieResult } from '../lib/movieView'
+import { toMovieExtrasView, toMovieResult, toTvExtrasView } from '../lib/movieView'
 import {
     getMovieExtras,
     getPersonMovieCredits,
+    getTvExtras,
     searchPerson,
     type MovieExtrasResponse,
     type PersonMovieCredits,
     type PersonSearchResult,
+    type TvExtrasResponse,
 } from '../lib/tmdb'
 
 // Auxiliary agent lookups built on the movie-extras + person endpoints (Phase 9):
@@ -112,4 +114,28 @@ export async function findSimilarMovies(
 ): Promise<MovieResult[]> {
     const extras = await deps.movieExtras(String(input.tmdbId))
     return toMovieExtrasView(extras).recommendations.slice(0, input.limit)
+}
+
+// ── find_similar_tv ──────────────────────────────────────────────────────────
+// The TV twin of find_similar_movies. TMDB's curated recommendation graph is far
+// better than free-form embedding search for "shows like <a specific title>",
+// and it isn't bounded by our local catalog. Recommendations already arrive in
+// the TV-extras append_to_response; `toTvExtrasView` maps them via `toTvResults`,
+// which stamps `mediaType: 'tv'` so cards route to /tv/:id.
+
+export interface TvExtrasLookupDeps {
+    tvExtras: (tvId: string) => Promise<TvExtrasResponse>
+}
+
+function defaultTvExtrasDeps(): TvExtrasLookupDeps {
+    return { tvExtras: (tvId) => getTvExtras(tvId) }
+}
+
+/** TMDB-graph recommendations for a TV show ("more like this"). */
+export async function findSimilarTv(
+    input: SimilarMoviesInput,
+    deps: TvExtrasLookupDeps = defaultTvExtrasDeps(),
+): Promise<MovieResult[]> {
+    const extras = await deps.tvExtras(String(input.tmdbId))
+    return toTvExtrasView(extras).recommendations.slice(0, input.limit)
 }

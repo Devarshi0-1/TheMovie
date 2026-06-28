@@ -10,15 +10,16 @@ import {
     type MovieForIngest,
     type MovieListItem,
 } from '../lib/tmdb'
-import type {
-    FetchFromTmdbInput,
-    MovieDetailsInput,
-    MovieDetailsResult,
-    MovieResult,
-    ScoredMovieResult,
-    SemanticSearchInput,
-    SqlSearchInput,
-    TrendingInput,
+import {
+    SEMANTIC_MATCH_FLOOR,
+    type FetchFromTmdbInput,
+    type MovieDetailsInput,
+    type MovieDetailsResult,
+    type MovieResult,
+    type ScoredMovieResult,
+    type SemanticSearchInput,
+    type SqlSearchInput,
+    type TrendingInput,
 } from '@themovie/schemas'
 
 // The three retrieval tiers + details/trending, as plain functions with all IO
@@ -211,6 +212,19 @@ export async function searchMoviesSql(
     return deps.sqlSearch(input)
 }
 
+/**
+ * Drop semantic hits whose cosine similarity is below the shared junk floor, so
+ * a sparse/off-topic catalog can't surface noise (e.g. an unrelated show as the
+ * "nearest" of K). Applied to each kNN ranking BEFORE fusion (RRF scores aren't
+ * comparable to cosine, so the floor must gate raw similarities). When nothing
+ * clears the floor the tier returns [], which the agent treats as a miss and
+ * escalates from — turning "weak results" into the same escalation path as
+ * "no results".
+ */
+export function aboveFloor(results: ScoredMovieResult[]): ScoredMovieResult[] {
+    return results.filter((r) => r.similarity >= SEMANTIC_MATCH_FLOOR)
+}
+
 // Reciprocal-rank-fusion damping constant (the standard k=60). Larger k flattens
 // the contribution gap between ranks; 60 is the well-established default.
 const RRF_K = 60
@@ -257,17 +271,19 @@ export async function semanticSearchMovies(
     const vector = await deps.embedQuery(input.query)
     const mode = input.mode ?? 'both'
 
-    if (mode === 'plot') return deps.knnSearch(vector, input.limit, 'plot')
-    if (mode === 'reception') return deps.knnSearch(vector, input.limit, 'reception')
+    if (mode === 'plot') return aboveFloor(await deps.knnSearch(vector, input.limit, 'plot'))
+    if (mode === 'reception')
+        return aboveFloor(await deps.knnSearch(vector, input.limit, 'reception'))
 
     // 'both': pull a candidate pool from each vector (more than `limit` so the
-    // fusion has material to re-rank), then merge by reciprocal rank.
+    // fusion has material to re-rank), floor each ranking, then merge by
+    // reciprocal rank (so a sub-floor hit can't be fused back in).
     const pool = Math.min(20, input.limit * 2)
     const [plot, reception] = await Promise.all([
         deps.knnSearch(vector, pool, 'plot'),
         deps.knnSearch(vector, pool, 'reception'),
     ])
-    return fuseByReciprocalRank([plot, reception], input.limit)
+    return fuseByReciprocalRank([aboveFloor(plot), aboveFloor(reception)], input.limit)
 }
 
 /** Tier 3 — last-resort TMDB lookup; writes back so the catalog self-heals. */
