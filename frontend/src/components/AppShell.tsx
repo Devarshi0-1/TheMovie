@@ -1,24 +1,45 @@
-import { Outlet, useRouterState } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { Link, Outlet, useRouterState } from '@tanstack/react-router'
+import { Fragment } from 'react'
 import {
     Breadcrumb,
     BreadcrumbItem,
+    BreadcrumbLink,
     BreadcrumbList,
     BreadcrumbPage,
+    BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { movieDetailsQueryOptions } from '../lib/movies'
 import { useFocusOnNavigate } from '../lib/navigation'
 import { AppSidebar } from './AppSidebar'
 import { CommandSearch } from './CommandSearch'
 import { SessionActions } from './SessionActions'
 
-// The current page's breadcrumb label, derived from the path's first segment.
-function pageTitle(pathname: string): string {
-    if (pathname === '/') return 'Discover'
+interface Crumb {
+    label: string
+    /** A link target for all but the last (current) crumb. */
+    to?: string
+}
+
+// The breadcrumb trail for a path: Discover is the root, then the current page
+// (the movie's title on a detail route, otherwise the capitalized segment).
+export function buildCrumbs(pathname: string, movieTitle?: string): Crumb[] {
+    if (pathname === '/') return [{ label: 'Discover' }]
     const segment = pathname.split('/').filter(Boolean)[0] ?? ''
-    if (segment === 'movie') return 'Movie'
-    return segment.charAt(0).toUpperCase() + segment.slice(1)
+    const current =
+        segment === 'movie'
+            ? (movieTitle ?? 'Movie')
+            : segment.charAt(0).toUpperCase() + segment.slice(1)
+    return [{ label: 'Discover', to: '/' }, { label: current }]
+}
+
+/** The movie id for a `/movie/:id` path, else null. */
+export function movieIdFromPath(pathname: string): number | null {
+    const match = /^\/movie\/(\d+)/.exec(pathname)
+    return match ? Number(match[1]) : null
 }
 
 /**
@@ -37,6 +58,15 @@ export function AppShell() {
     const pathname = useRouterState({ select: (s) => s.location.pathname })
     const mainRef = useFocusOnNavigate<HTMLDivElement>()
 
+    // On a movie route, read the (already loader-cached) details so the breadcrumb
+    // can show the title instead of a generic "Movie". Disabled off that route.
+    const movieId = movieIdFromPath(pathname)
+    const movieQuery = useQuery({
+        ...movieDetailsQueryOptions(movieId ?? 0),
+        enabled: movieId !== null,
+    })
+    const crumbs = buildCrumbs(pathname, movieQuery.data?.title)
+
     return (
         <TooltipProvider>
             <SidebarProvider>
@@ -50,9 +80,25 @@ export function AppShell() {
                         />
                         <Breadcrumb>
                             <BreadcrumbList>
-                                <BreadcrumbItem>
-                                    <BreadcrumbPage>{pageTitle(pathname)}</BreadcrumbPage>
-                                </BreadcrumbItem>
+                                {crumbs.map((crumb, index) => {
+                                    const isLast = index === crumbs.length - 1
+                                    return (
+                                        <Fragment key={crumb.label}>
+                                            <BreadcrumbItem>
+                                                {isLast || !crumb.to ? (
+                                                    <BreadcrumbPage className="max-w-[40ch] truncate">
+                                                        {crumb.label}
+                                                    </BreadcrumbPage>
+                                                ) : (
+                                                    <BreadcrumbLink asChild>
+                                                        <Link to={crumb.to}>{crumb.label}</Link>
+                                                    </BreadcrumbLink>
+                                                )}
+                                            </BreadcrumbItem>
+                                            {!isLast && <BreadcrumbSeparator />}
+                                        </Fragment>
+                                    )
+                                })}
                             </BreadcrumbList>
                         </Breadcrumb>
                         <div className="ml-auto flex items-center gap-2">

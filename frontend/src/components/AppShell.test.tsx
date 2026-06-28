@@ -2,7 +2,34 @@ import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { sessionQueryKey } from '../lib/auth'
 import { makeTestQueryClient, renderWithProviders } from '../test/providers'
-import { AppShell } from './AppShell'
+import { AppShell, buildCrumbs, movieIdFromPath } from './AppShell'
+
+describe('breadcrumb helpers', () => {
+    it('builds a single Discover crumb at the root', () => {
+        expect(buildCrumbs('/')).toEqual([{ label: 'Discover' }])
+    })
+
+    it('builds a Discover › Page trail for a top-level route', () => {
+        expect(buildCrumbs('/watchlist')).toEqual([
+            { label: 'Discover', to: '/' },
+            { label: 'Watchlist' },
+        ])
+    })
+
+    it('uses the movie title on a detail route, falling back to "Movie"', () => {
+        expect(buildCrumbs('/movie/27205', 'Inception')).toEqual([
+            { label: 'Discover', to: '/' },
+            { label: 'Inception' },
+        ])
+        expect(buildCrumbs('/movie/27205')[1]).toEqual({ label: 'Movie' })
+    })
+
+    it('extracts the movie id only from a /movie/:id path (edge)', () => {
+        expect(movieIdFromPath('/movie/27205')).toBe(27205)
+        expect(movieIdFromPath('/watchlist')).toBeNull()
+        expect(movieIdFromPath('/movie/abc')).toBeNull()
+    })
+})
 
 describe('<AppShell />', () => {
     // ── Feature / happy path ──────────────────────────────────────────────
