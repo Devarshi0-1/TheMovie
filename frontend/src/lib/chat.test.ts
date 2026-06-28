@@ -142,6 +142,12 @@ describe('chat part helpers', () => {
         expect(toolLabel('search_movies_sql', true)).toBe('Searched the catalog')
     })
 
+    it('labels the TV retrieval tools distinctly from the movie ones (TV parity)', () => {
+        expect(toolLabel('search_tv_sql', false)).toBe('Searching TV shows')
+        expect(toolLabel('semantic_search_tv', true)).toBe('Searched TV by theme')
+        expect(toolLabel('summarize_tv_reviews', false)).toBe('Summarizing TV reviews')
+    })
+
     it('falls back to a humanized label for unknown tools', () => {
         expect(toolLabel('some_new_tool', false)).toBe('Running some new tool')
         expect(toolLabel('some_new_tool', true)).toBe('Ran some new tool')

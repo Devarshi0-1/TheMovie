@@ -7,17 +7,19 @@ import { releaseYear } from '../lib/movies'
 const TMDB_POSTER_CARD_BASE = 'https://image.tmdb.org/t/p/w185'
 
 /**
- * The movies an assistant turn surfaced, as a horizontally-scrollable strip of
- * clickable poster cards — so the agent's picks are tappable shortcuts to each
- * movie's detail page instead of plain text the user has to re-search. Renders
- * nothing when the turn produced no movies.
+ * The movies and TV shows an assistant turn surfaced, as a horizontally-
+ * scrollable strip of clickable poster cards — so the agent's picks are tappable
+ * shortcuts to each title's detail page instead of plain text the user has to
+ * re-search. Each card routes by `mediaType` (`/tv/$id` for a show, `/movie/$id`
+ * otherwise), so a TV result from the TV tools lands on the show's page. Renders
+ * nothing when the turn produced no results.
  */
 export function ChatMovieResults({ movies }: { movies: MovieResult[] }) {
     if (movies.length === 0) return null
 
     return (
         <ul
-            aria-label="Suggested movies"
+            aria-label="Suggested titles"
             className="-mx-1 mt-1 flex list-none gap-3 overflow-x-auto px-1 pb-2"
         >
             {movies.map((movie) => {
@@ -25,10 +27,11 @@ export function ChatMovieResults({ movies }: { movies: MovieResult[] }) {
                     typeof movie.voteAverage === 'number' && movie.voteAverage > 0
                         ? movie.voteAverage.toFixed(1)
                         : null
+                const to = movie.mediaType === 'tv' ? '/tv/$id' : '/movie/$id'
                 return (
-                    <li key={movie.tmdbId} className="shrink-0">
+                    <li key={`${movie.mediaType ?? 'movie'}-${movie.tmdbId}`} className="shrink-0">
                         <Link
-                            to="/movie/$id"
+                            to={to}
                             params={{ id: String(movie.tmdbId) }}
                             className="block w-28 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label={movie.title}

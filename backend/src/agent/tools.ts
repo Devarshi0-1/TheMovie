@@ -9,8 +9,9 @@ import {
     SqlSearchInputSchema,
     TrendingInputSchema,
     WatchProvidersInputSchema,
+    type MovieResult,
 } from '@themovie/schemas'
-import { summarizeReviews } from '../lib/summary'
+import { summarizeReviews, summaryDeps } from '../lib/summary'
 import { findMoviesByPerson, findSimilarMovies, getWatchProviders } from './lookups'
 import {
     fetchFromTmdb,
@@ -19,6 +20,7 @@ import {
     searchMoviesSql,
     semanticSearchMovies,
 } from './retrieval'
+import { fetchTvFromTmdb, getTrendingTvShows, searchTvSql, semanticSearchTv } from './retrieval-tv'
 
 // Tool definitions for the agent loop (Phase 4.3). Descriptions are prescriptive
 // about WHEN to call each, encoding the cheapest-sufficient-first escalation:
@@ -113,6 +115,67 @@ const findSimilarMoviesTool = tool({
     execute: (input) => findSimilarMovies(input),
 })
 
+// ── TV tools (Phase 10.4) ─────────────────────────────────────────────────────
+// TV is a first-class media type with its own `tv_shows` catalog and retrieval
+// tiers (retrieval-tv.ts), so it gets a parallel toolset rather than overloading
+// the movie tools — the movie pipeline stays untouched. The TV retrieval helpers
+// return the shared `MovieResult` shape (name/first_air_date normalized to
+// title/releaseDate) but don't stamp `mediaType`; we tag each hit `'tv'` here so
+// the chat UI routes its result cards to `/tv/:id` instead of `/movie/:id`.
+
+export const asTvResults = <T extends MovieResult>(results: T[]): Array<T & { mediaType: 'tv' }> =>
+    results.map((r) => ({ ...r, mediaType: 'tv' as const }))
+
+const searchTvSqlTool = tool({
+    description:
+        'TIER 1 (TV) — structured catalog lookup over local TV shows. Use this FIRST for concrete, ' +
+        'exact TV queries: a specific show title, a genre, a first-air year, or a combination ' +
+        '(e.g. "crime dramas from 2015"). Cheapest and most precise for shows. If it returns nothing, ' +
+        'or the query is conceptual/thematic, escalate to semantic_search_tv.',
+    inputSchema: SqlSearchInputSchema,
+    execute: async (input) => asTvResults(await searchTvSql(input)),
+})
+
+const semanticSearchTvTool = tool({
+    description:
+        'TIER 2 (TV) — semantic similarity search over embedded TV shows (pgvector). Use for ' +
+        'conceptual or thematic TV queries keywords cannot capture, e.g. "a show about a teacher ' +
+        'turned drug kingpin" or "a slow-burn prestige mystery". Prefer search_tv_sql for exact ' +
+        'queries. Set `mode`: "plot" for what a show is ABOUT; "reception" for how AUDIENCES ' +
+        'experienced it ("a sitcom people find genuinely comforting", "a finale fans argue about"); ' +
+        '"both" (the default) when unsure. If nothing relevant comes back, escalate to fetch_tv_from_tmdb.',
+    inputSchema: SemanticSearchInputSchema,
+    execute: async (input) => asTvResults(await semanticSearchTv(input)),
+})
+
+const fetchTvFromTmdbTool = tool({
+    description:
+        'TIER 3 (TV) — LAST RESORT. Fetch TV shows from the live TMDB API only when the local ' +
+        'catalog misses: a brand-new series, an obscure show, or when both search_tv_sql and ' +
+        'semantic_search_tv came up empty. On a hit the show is written back to the local catalog ' +
+        '(upsert + embed) so future queries are served locally. Provide a `query` (title/keywords) ' +
+        'or a specific `tmdbId`.',
+    inputSchema: FetchFromTmdbInputSchema,
+    execute: async (input) => asTvResults(await fetchTvFromTmdb(input)),
+})
+
+const getTrendingTvTool = tool({
+    description:
+        'Get the TV shows currently trending on TMDB. Use for open-ended "what show should I watch" / ' +
+        '"what series is popular right now" requests, not when the user already described what they want.',
+    inputSchema: TrendingInputSchema,
+    execute: async (input) => asTvResults(await getTrendingTvShows(input)),
+})
+
+const summarizeTvReviewsTool = tool({
+    description:
+        'Summarize a SPECIFIC TV show’s audience reviews into spoiler-free pros/cons and a one-line ' +
+        'vibe, by TMDB show id. Use when the user asks what people think of a show, its reception, or ' +
+        'whether it’s worth watching. Results are cached, so it’s cheap to call.',
+    inputSchema: ReviewSummaryInputSchema,
+    execute: (input) => summarizeReviews(input.tmdbId, summaryDeps('tv')),
+})
+
 /** The retrieval toolset the agent loop exposes to the model. */
 export const retrievalTools = {
     search_movies_sql: searchMoviesSqlTool,
@@ -124,6 +187,12 @@ export const retrievalTools = {
     find_movies_by_person: findMoviesByPersonTool,
     get_watch_providers: getWatchProvidersTool,
     find_similar_movies: findSimilarMoviesTool,
+    // TV parity (Phase 10.4) — same tiers over the `tv_shows` catalog.
+    search_tv_sql: searchTvSqlTool,
+    semantic_search_tv: semanticSearchTvTool,
+    fetch_tv_from_tmdb: fetchTvFromTmdbTool,
+    get_trending_tv: getTrendingTvTool,
+    summarize_tv_reviews: summarizeTvReviewsTool,
 }
 
 export type RetrievalToolName = keyof typeof retrievalTools

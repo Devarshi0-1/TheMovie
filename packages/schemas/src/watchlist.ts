@@ -52,15 +52,20 @@ export const WatchlistRemoveResultSchema = z.object({
 })
 export type WatchlistRemoveResult = z.infer<typeof WatchlistRemoveResultSchema>
 
-/** One movie in a `manage_watchlist` proposal. */
+/** One movie or show in a `manage_watchlist` proposal. */
 export const ManageWatchlistMovieSchema = z.object({
-    movieId: z.number().int().positive().describe('The TMDB movie id to add/remove.'),
+    movieId: z.number().int().positive().describe('The TMDB movie/show id to add/remove.'),
     title: z
         .string()
         .min(1)
         .optional()
-        .describe('The movie title (required when adding so it can be displayed).'),
+        .describe('The movie/show title (required when adding so it can be displayed).'),
     posterPath: z.string().nullable().optional().describe('Optional poster path when adding.'),
+    // TMDB namespaces ids by media type, so each item carries its own
+    // discriminator; defaults to 'movie' so movie-only proposals stay unchanged.
+    mediaType: MediaTypeSchema.default('movie').describe(
+        "Set to 'tv' when this entry is a TV show, otherwise 'movie' (the default).",
+    ),
 })
 export type ManageWatchlistMovie = z.infer<typeof ManageWatchlistMovieSchema>
 
