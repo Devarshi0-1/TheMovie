@@ -87,7 +87,15 @@ function defaultDeps(): WatchlistDeps {
         },
 
         async cacheAdd(userId, movieId, mediaType) {
-            await redis.sadd(setKey(userId), member(movieId, mediaType))
+            // Only mirror into an ALREADY-populated set. Creating a one-member set
+            // on a cold cache would leave it partially populated: `cacheHas` would
+            // then see `exists()=true` and answer false for every OTHER title the
+            // user really has (the set has no TTL, so the wholesale hydrate never
+            // re-runs). A cold set is instead left absent so the next
+            // `isInWatchlist` rebuilds it in full from Postgres.
+            if (await redis.exists(setKey(userId))) {
+                await redis.sadd(setKey(userId), member(movieId, mediaType))
+            }
         },
         async cacheRemove(userId, movieId, mediaType) {
             await redis.srem(setKey(userId), member(movieId, mediaType))

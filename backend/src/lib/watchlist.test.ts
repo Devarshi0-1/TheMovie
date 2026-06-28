@@ -43,8 +43,10 @@ const fakeDeps = (rows: WatchlistEntry[] = []) => {
         },
         async cacheAdd(_userId, movieId, mediaType) {
             calls.cacheAdd++
+            // Models the real impl: only mirror into an ALREADY-populated set; a
+            // cold set is left absent so the next read hydrates it wholesale.
+            if (!populated) return
             set.add(member(movieId, mediaType))
-            populated = true
         },
         async cacheRemove(_userId, movieId, mediaType) {
             calls.cacheRemove++
@@ -63,8 +65,9 @@ const fakeDeps = (rows: WatchlistEntry[] = []) => {
 }
 
 describe('addToWatchlist', () => {
-    it('adds a new movie and reports added=true (feature)', async () => {
-        const { deps, list, set, calls } = fakeDeps()
+    it('adds a new movie and mirrors it into an already-warm set (feature)', async () => {
+        // Start warm (an existing entry) so the membership set is populated.
+        const { deps, list, set, calls } = fakeDeps([entry(1)])
         const res = await addToWatchlist(
             'u1',
             { movieId: 5, title: 'Dune', mediaType: 'movie' },
@@ -72,8 +75,24 @@ describe('addToWatchlist', () => {
         )
         expect(res.added).toBe(true)
         expect(list.map((r) => r.movieId)).toContain(5)
-        expect(set.has('movie:5')).toBe(true) // mirrored to the membership set
+        expect(set.has('movie:5')).toBe(true) // mirrored to the warm membership set
         expect(calls.cacheAdd).toBe(1)
+    })
+
+    it('does not partially populate a cold set on add (regression)', async () => {
+        // Cold cache, but the user already has title 9 in Postgres. Adding title 5
+        // must NOT create a one-member set (movie:5 only) — that would make a later
+        // membership check for title 9 a false negative. Instead the cold set is
+        // left absent so the next isInWatchlist rebuilds it in full from Postgres.
+        const { deps, set } = fakeDeps()
+        deps.dbList = async () => [entry(9), entry(5)]
+        await addToWatchlist('u1', { movieId: 5, title: 'Dune', mediaType: 'movie' }, deps)
+        expect(set.size).toBe(0) // cold set untouched, not half-filled
+
+        // The next membership check hydrates the whole set and answers correctly.
+        expect(await isInWatchlist('u1', 9, 'movie', deps)).toBe(true)
+        expect(set.has('movie:9')).toBe(true)
+        expect(set.has('movie:5')).toBe(true)
     })
 
     it('is idempotent: adding an existing entry reports added=false (edge: unique_user_media)', async () => {
