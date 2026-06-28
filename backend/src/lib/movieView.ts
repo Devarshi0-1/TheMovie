@@ -45,6 +45,13 @@ export function genreNames(ids: number[] | null | undefined): string[] {
     return ids.map((id) => TMDB_MOVIE_GENRES[id]).filter((name): name is string => Boolean(name))
 }
 
+/** The movie genres ({ id, name }) as a list, alphabetized — for the genre filter. */
+export function movieGenreList(): { id: number; name: string }[] {
+    return Object.entries(TMDB_MOVIE_GENRES)
+        .map(([id, name]) => ({ id: Number(id), name }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 // Structural shapes of the raw TMDB items we read — kept local (rather than the
 // huge generated path types) so the mappers depend only on the fields they use.
 interface TmdbListItemLike {
