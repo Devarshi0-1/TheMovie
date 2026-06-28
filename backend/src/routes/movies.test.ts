@@ -33,4 +33,23 @@ describe('movies route input validation', () => {
         const res = await moviesRoute.request('/abc/extras')
         expect(res.status).toBe(400)
     })
+
+    // /suggest returns 200 + [] for a blank query (it's typed-into, not submitted)
+    // and only 400s on an abusive over-long query — both before any DB/TMDB call.
+    it('returns an empty list for a blank suggest query (edge, no network)', async () => {
+        const res = await moviesRoute.request('/suggest?q=%20%20')
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual([])
+    })
+
+    it('returns an empty list when the suggest query is omitted (edge)', async () => {
+        const res = await moviesRoute.request('/suggest')
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual([])
+    })
+
+    it('rejects an over-long suggest query (edge: bounded input)', async () => {
+        const res = await moviesRoute.request('/suggest?q=' + 'a'.repeat(201))
+        expect(res.status).toBe(400)
+    })
 })

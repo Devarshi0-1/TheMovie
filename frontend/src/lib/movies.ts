@@ -79,6 +79,22 @@ export function searchMoviesQueryOptions(query: string) {
     })
 }
 
+export async function fetchSuggestions(query: string): Promise<MovieResult[]> {
+    return parseMovies(await apiFetch(`/api/v1/movies/suggest?q=${encodeURIComponent(query)}`))
+}
+
+export function suggestMoviesQueryOptions(query: string) {
+    const q = query.trim()
+    return queryOptions({
+        queryKey: ['movies', 'suggest', q] as const,
+        queryFn: () => fetchSuggestions(q),
+        // Only suggest once there's something to match; keep results briefly warm
+        // so backspacing/retyping doesn't refetch (the endpoint blends PG + TMDB).
+        enabled: q.length >= 2,
+        staleTime: 5 * 60_000,
+    })
+}
+
 export async function fetchMovieDetails(id: number): Promise<MovieDetailView> {
     return MovieDetailViewSchema.parse(await apiFetch(`/api/v1/movies/${id}`))
 }
