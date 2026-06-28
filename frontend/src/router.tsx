@@ -34,6 +34,12 @@ export function getRouter() {
         context: { queryClient },
         defaultPreload: 'intent',
         scrollRestoration: true,
+        // Animate route changes with the browser View Transitions API (a crossfade
+        // by default). Posters that share a `view-transition-name` across the grid
+        // and the detail page morph between the two (see MovieCard / movie.$id).
+        // Degrades to an instant change where the API is unsupported, and is
+        // disabled under prefers-reduced-motion (see app.css).
+        defaultViewTransition: true,
         // App-level fallbacks so unknown URLs and unhandled loader/render errors
         // get a branded screen instead of TanStack's bare defaults.
         defaultNotFoundComponent: NotFound,

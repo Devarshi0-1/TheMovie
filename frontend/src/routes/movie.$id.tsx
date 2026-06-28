@@ -99,6 +99,9 @@ function MovieDetail() {
                                 alt={`${movie.title} poster`}
                                 width={342}
                                 height={513}
+                                // Matches the grid card's poster name so it morphs
+                                // into place on navigation (View Transitions).
+                                style={{ viewTransitionName: `movie-poster-${movie.tmdbId}` }}
                                 className="h-full w-full object-cover"
                             />
                         ) : (

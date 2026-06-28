@@ -33,6 +33,9 @@ export function MovieCard({ movie }: { movie: MovieResult }) {
                         // browser the aspect ratio up front — no layout shift (web.dev CLS).
                         width={342}
                         height={513}
+                        // Shared name so this poster morphs into the detail-page poster
+                        // on navigation (View Transitions). Unique per movie.
+                        style={{ viewTransitionName: `movie-poster-${movie.tmdbId}` }}
                         className="h-full w-full object-cover"
                     />
                 ) : (

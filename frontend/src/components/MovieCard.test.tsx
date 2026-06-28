@@ -30,6 +30,13 @@ describe('<MovieCard />', () => {
         expect(img).toHaveAttribute('height', '513')
     })
 
+    it('names the poster for a shared-element view transition into the detail page', () => {
+        render(<MovieCard movie={movie} />)
+        const img = screen.getByRole('img', { name: 'Inception poster' })
+        // The detail-page poster carries the same name, so the browser morphs them.
+        expect(img.getAttribute('style')).toContain('view-transition-name: movie-poster-27205')
+    })
+
     // ── Edge cases ────────────────────────────────────────────────────────
     it('shows a placeholder (no broken image) when posterPath is null', () => {
         render(<MovieCard movie={{ ...movie, posterPath: null }} />)
