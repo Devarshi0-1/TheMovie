@@ -70,19 +70,25 @@ function Discover() {
 
     return (
         <main className="mx-auto w-full max-w-[1100px] px-6 py-10">
-            <header className="relative mb-12 overflow-hidden rounded-2xl border border-border bg-card">
-                {featuredBackdrop && (
-                    <div
-                        className="pointer-events-none absolute inset-0 bg-cover bg-[center_25%] opacity-40"
-                        style={{ backgroundImage: `url(${TMDB_BACKDROP_BASE}${featuredBackdrop})` }}
-                        aria-hidden="true"
-                    />
-                )}
-                {/* Scrim so the headline/search stay legible over any backdrop. */}
+            <header className="relative mb-12 rounded-2xl border border-border bg-card">
+                {/* Backdrop + scrim live in their own clipped layer so the hero's
+                    rounded corners still mask the image, WITHOUT the header
+                    clipping the search typeahead dropdown that overflows below it. */}
                 <div
-                    className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-card via-card/95 to-card/55"
+                    className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl"
                     aria-hidden="true"
-                />
+                >
+                    {featuredBackdrop && (
+                        <div
+                            className="absolute inset-0 bg-cover bg-[center_25%] opacity-40"
+                            style={{
+                                backgroundImage: `url(${TMDB_BACKDROP_BASE}${featuredBackdrop})`,
+                            }}
+                        />
+                    )}
+                    {/* Scrim so the headline/search stay legible over any backdrop. */}
+                    <div className="absolute inset-0 bg-gradient-to-tr from-card via-card/95 to-card/55" />
+                </div>
 
                 <div className="relative px-6 py-12 sm:px-10 sm:py-16">
                     <p className="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
