@@ -478,3 +478,23 @@ export const getMovieReviews = async (
     movieId: number,
     cache: TmdbCache = redisCache,
 ): Promise<string[]> => (await getMovieReviewMeta(movieId, cache)).reviews
+
+type TvReviewsResponse =
+    paths['/3/tv/{series_id}/reviews']['get']['responses']['200']['content']['application/json']
+
+/**
+ * TV review bodies + `totalResults` — the TV mirror of `getMovieReviewMeta`,
+ * over `/tv/{id}/reviews`. Feeds the durable TV reception summary (Phase 10.3).
+ */
+export const getTvReviewMeta = async (
+    tvId: number,
+    cache: TmdbCache = redisCache,
+): Promise<{ totalResults: number; reviews: string[] }> => {
+    const data = await cached(cache, `tv:${tvId}:reviews`, () =>
+        fetchFromTMDB<TvReviewsResponse>(`/tv/${tvId}/reviews?language=en-US&page=1`),
+    )
+    const reviews = (data.results ?? [])
+        .map((r) => r.content)
+        .filter((c): c is string => typeof c === 'string' && c.trim().length > 0)
+    return { totalResults: data.total_results ?? reviews.length, reviews }
+}

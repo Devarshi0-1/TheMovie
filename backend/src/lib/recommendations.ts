@@ -56,7 +56,11 @@ function defaultDeps(): RecommendationDeps {
     return {
         async getWatchlist(userId) {
             const entries = await getWatchlist(userId)
-            return entries.map((e) => ({ tmdbId: e.movieId, title: e.title }))
+            // Seed only from movie entries — recs run over the movie vector space.
+            // TV-seeded recommendations land in Phase 10.4.
+            return entries
+                .filter((e) => e.mediaType === 'movie')
+                .map((e) => ({ tmdbId: e.movieId, title: e.title }))
         },
 
         async similarToMovie(tmdbId, limit, excludeTmdbIds) {

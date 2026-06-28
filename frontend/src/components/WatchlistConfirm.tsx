@@ -56,14 +56,16 @@ export function WatchlistConfirm({
         // reconciles the caches through the hook's onSuccess. REST is idempotent,
         // so retrying after a partial failure is safe.
         const settled = await Promise.allSettled(
+            // The agent's watchlist proposals are movie-only until Phase 10.4.
             movies.map((m) =>
                 action === 'add'
                     ? add.mutateAsync({
                           movieId: m.movieId,
                           title: m.title ?? `Movie ${m.movieId}`,
                           posterPath: m.posterPath ?? null,
+                          mediaType: 'movie',
                       })
-                    : remove.mutateAsync(m.movieId),
+                    : remove.mutateAsync({ movieId: m.movieId, mediaType: 'movie' }),
             ),
         )
 

@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import { MoreLikeThis } from '../components/MovieExtras'
 import { MovieExtrasSection } from '../components/MovieExtrasSection'
 import { MovieHero } from '../components/MovieHero'
-import { tvDetailsQueryOptions, tvExtrasQueryOptions } from '../lib/movies'
+import { ReviewSummary, ReviewSummarySkeleton } from '../components/ReviewSummary'
+import { WatchlistButton } from '../components/WatchlistButton'
+import { tvDetailsQueryOptions, tvExtrasQueryOptions, tvSummaryQueryOptions } from '../lib/movies'
 
 function parseId(raw: string): number {
     const id = Number(raw)
@@ -53,6 +55,7 @@ function TvDetail() {
     const tvId = Number(id)
     const { data: show } = useSuspenseQuery(tvDetailsQueryOptions(tvId))
     const extras = useQuery(tvExtrasQueryOptions(tvId))
+    const summary = useQuery(tvSummaryQueryOptions(tvId))
 
     return (
         <main className="mx-auto w-full max-w-[1100px] px-6 py-8">
@@ -63,10 +66,32 @@ function TvDetail() {
                 <ArrowLeft className="size-4" aria-hidden="true" /> Back to TV shows
             </Link>
 
-            <MovieHero movie={show} />
+            <MovieHero
+                movie={show}
+                action={
+                    <WatchlistButton
+                        movieId={show.tmdbId}
+                        title={show.title}
+                        posterPath={show.posterPath}
+                        mediaType="tv"
+                    />
+                }
+            />
 
             <div className="mt-12">
                 <MovieExtrasSection extras={extras} />
+            </div>
+
+            <div className="mt-12">
+                {summary.isPending ? (
+                    <ReviewSummarySkeleton />
+                ) : summary.isError ? (
+                    <Alert variant="destructive">
+                        <AlertDescription>Couldn’t load the review summary.</AlertDescription>
+                    </Alert>
+                ) : (
+                    <ReviewSummary summary={summary.data} />
+                )}
             </div>
 
             {extras.isSuccess && extras.data.recommendations.length > 0 && (

@@ -3,6 +3,7 @@ import { MovieIdSchema } from '@themovie/schemas'
 import { getTrendingTv, getTvDetails, getTvExtras, searchTv } from '../lib/tmdb'
 import { DEFAULT_WATCH_REGION, toTvDetailView, toTvExtrasView, toTvResults } from '../lib/movieView'
 import { suggestTvShows } from '../lib/suggest'
+import { summarizeReviews, summaryDeps } from '../lib/summary'
 
 // TV endpoints mirror the movie endpoints, proxying TMDB's `/tv/*` routes and
 // mapping onto the SAME shared shapes (with mediaType: 'tv'), so the frontend
@@ -89,6 +90,23 @@ tvRoute.get('/:id/extras', async (c) => {
     } catch (error) {
         console.error('Error fetching TV extras:', error)
         return c.json({ error: 'Failed to fetch TV extras' }, 500)
+    }
+})
+
+// Spoiler-free AI summary of a show's audience reviews ("What audiences say").
+// Durable in `tv_shows` + embedded into its reception vector, mirroring movies.
+tvRoute.get('/:id/summary', async (c) => {
+    try {
+        const id = MovieIdSchema.safeParse(c.req.param('id'))
+        if (!id.success) {
+            return c.json({ error: 'A valid TV id is required' }, 400)
+        }
+
+        const summary = await summarizeReviews(id.data, summaryDeps('tv'))
+        return c.json(summary)
+    } catch (error) {
+        console.error('Error summarizing TV reviews:', error)
+        return c.json({ error: 'Failed to summarize reviews' }, 500)
     }
 })
 

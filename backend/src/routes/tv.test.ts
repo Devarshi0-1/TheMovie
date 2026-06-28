@@ -47,4 +47,9 @@ describe('tv route input validation', () => {
         const res = await tvRoute.request('/suggest?q=' + 'a'.repeat(201))
         expect(res.status).toBe(400)
     })
+
+    it('rejects a non-numeric id for the summary route (edge)', async () => {
+        const res = await tvRoute.request('/abc/summary')
+        expect(res.status).toBe(400)
+    })
 })

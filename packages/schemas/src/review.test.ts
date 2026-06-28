@@ -21,6 +21,15 @@ describe('ReviewInputSchema', () => {
     })
 })
 
+describe('ReviewInputSchema mediaType', () => {
+    it('defaults mediaType to movie, accepts tv (feature: media discriminator)', () => {
+        expect(ReviewInputSchema.parse({ movieId: 5, content: 'ok' }).mediaType).toBe('movie')
+        expect(
+            ReviewInputSchema.parse({ movieId: 1396, content: 'great', mediaType: 'tv' }).mediaType,
+        ).toBe('tv')
+    })
+})
+
 describe('ReviewEntrySchema', () => {
     it('parses a stored entry with a null rating (feature)', () => {
         const parsed = ReviewEntrySchema.parse({
@@ -29,6 +38,7 @@ describe('ReviewEntrySchema', () => {
             movieId: 5,
             rating: null,
             content: 'meh',
+            mediaType: 'movie',
             createdAt: '2026-01-01T00:00:00.000Z',
         })
         expect(parsed.rating).toBeNull()

@@ -25,6 +25,14 @@ describe('WatchlistAddSchema', () => {
         expect(() => WatchlistAddSchema.parse({ movieId: 0, title: 'x' })).toThrow()
         expect(() => WatchlistAddSchema.parse({ movieId: 5, title: '' })).toThrow()
     })
+
+    it('defaults mediaType to movie, accepts tv (feature: media discriminator)', () => {
+        expect(WatchlistAddSchema.parse({ movieId: 5, title: 'Dune' }).mediaType).toBe('movie')
+        expect(
+            WatchlistAddSchema.parse({ movieId: 1396, title: 'Breaking Bad', mediaType: 'tv' })
+                .mediaType,
+        ).toBe('tv')
+    })
 })
 
 describe('ManageWatchlistInputSchema', () => {
@@ -60,17 +68,34 @@ describe('WatchlistEntrySchema', () => {
             movieId: 5,
             title: 'Dune',
             posterPath: null,
+            mediaType: 'movie',
             createdAt: '2026-01-01T00:00:00.000Z',
         })
         expect(parsed.title).toBe('Dune')
+    })
+
+    it('requires a mediaType on a stored entry (edge)', () => {
+        expect(() =>
+            WatchlistEntrySchema.parse({
+                movieId: 5,
+                title: 'Dune',
+                posterPath: null,
+                createdAt: '2026-01-01T00:00:00.000Z',
+            }),
+        ).toThrow()
     })
 })
 
 describe('REST response schemas', () => {
     it('parses status, add, and remove results (feature)', () => {
         expect(WatchlistStatusSchema.parse({ inWatchlist: true }).inWatchlist).toBe(true)
-        expect(WatchlistAddResultSchema.parse({ added: true, movieId: 5 }).added).toBe(true)
-        expect(WatchlistRemoveResultSchema.parse({ removed: true, movieId: 5 }).removed).toBe(true)
+        expect(
+            WatchlistAddResultSchema.parse({ added: true, movieId: 5, mediaType: 'movie' }).added,
+        ).toBe(true)
+        expect(
+            WatchlistRemoveResultSchema.parse({ removed: true, movieId: 1396, mediaType: 'tv' })
+                .removed,
+        ).toBe(true)
     })
 
     it('rejects a malformed result (edge)', () => {

@@ -136,6 +136,10 @@ export const watchlist = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: 'cascade' }),
         movieId: integer('movie_id').notNull(),
+        // 'movie' | 'tv'. TMDB ids are namespaced by media type, so membership is
+        // keyed on (user, mediaType, movieId). Defaults to 'movie' so the column
+        // backfills existing rows (Phase 10.3).
+        mediaType: text('media_type').notNull().default('movie'),
         title: text('title').notNull(),
         posterPath: text('poster_path'),
         createdAt: tstz('created_at').notNull().defaultNow(),
@@ -144,7 +148,7 @@ export const watchlist = pgTable(
             .defaultNow()
             .$onUpdate(() => new Date()),
     },
-    (t) => [unique('unique_user_movie').on(t.userId, t.movieId)],
+    (t) => [unique('unique_user_media').on(t.userId, t.mediaType, t.movieId)],
 )
 
 // Local catalog of movies. TMDB data is persisted here (the self-healing
@@ -312,6 +316,9 @@ export const review = pgTable(
             .notNull()
             .references(() => user.id, { onDelete: 'cascade' }),
         movieId: integer('movie_id').notNull(),
+        // 'movie' | 'tv' — one review per user per (mediaType, movieId). Defaults
+        // to 'movie' so the column backfills existing rows (Phase 10.3).
+        mediaType: text('media_type').notNull().default('movie'),
         rating: integer('rating'),
         content: text('content').notNull(),
         createdAt: tstz('created_at').notNull().defaultNow(),
@@ -321,7 +328,7 @@ export const review = pgTable(
             .$onUpdate(() => new Date()),
     },
     (t) => [
-        unique('unique_user_movie_review').on(t.userId, t.movieId),
-        index('review_movie_idx').on(t.movieId),
+        unique('unique_user_media_review').on(t.userId, t.mediaType, t.movieId),
+        index('review_media_idx').on(t.mediaType, t.movieId),
     ],
 )

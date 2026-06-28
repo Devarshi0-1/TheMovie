@@ -22,6 +22,7 @@ const fakeDeps = (over: Partial<SummaryDeps> = {}) => {
         cacheSet: [] as { key: string; ttl: number }[],
     }
     const deps: SummaryDeps = {
+        cacheKey: (id) => `movie:${id}:summary`,
         async fetchReviewMeta() {
             calls.fetch++
             // totalResults (17) intentionally differs from the 2 bodies, so tests
@@ -172,5 +173,13 @@ describe('summarizeReviews', () => {
         const { deps, calls } = fakeDeps()
         await summarizeReviews(99, deps)
         expect(calls.cacheSet[0]!.key).toBe('movie:99:summary')
+    })
+
+    it('honors a TV-namespaced cache key from its deps (feature: TV summaries)', async () => {
+        // The same pipeline serves TV — only the deps differ (tv_shows table, TV
+        // review fetcher, and a `tv:` cache-key prefix from summaryDeps('tv')).
+        const { deps, calls } = fakeDeps({ cacheKey: (id) => `tv:${id}:summary` })
+        await summarizeReviews(1396, deps)
+        expect(calls.cacheSet[0]!.key).toBe('tv:1396:summary')
     })
 })
