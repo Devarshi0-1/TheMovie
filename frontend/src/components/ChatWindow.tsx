@@ -23,13 +23,7 @@ import {
 } from '../lib/chat'
 import { ChatComposer } from './ChatComposer'
 import { ChatMessage } from './ChatMessage'
-
-const SUGGESTIONS = [
-    'A movie where the hero later becomes the villain',
-    'Slow-burn sci-fi from the 2010s',
-    'What should I watch tonight?',
-    'Add Inception to my watchlist',
-]
+import { CHAT_QUICK_PROMPTS, CHAT_STARTERS, ChatSuggestions } from './ChatSuggestions'
 
 /**
  * The chat window. Wires `useChat` to the auth-gated `POST /api/v1/chat`,
@@ -109,19 +103,11 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
                                         </EmptyDescription>
                                     </EmptyHeader>
                                     <EmptyContent>
-                                        <div className="flex flex-wrap justify-center gap-2.5">
-                                            {SUGGESTIONS.map((text) => (
-                                                <Button
-                                                    key={text}
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => void sendMessage({ text })}
-                                                >
-                                                    {text}
-                                                </Button>
-                                            ))}
-                                        </div>
+                                        <ChatSuggestions
+                                            prompts={CHAT_STARTERS}
+                                            onSelect={(text) => void sendMessage({ text })}
+                                            className="justify-center"
+                                        />
                                     </EmptyContent>
                                 </Empty>
                             ) : (
@@ -174,6 +160,17 @@ export function ChatWindow({ conversationId }: { conversationId?: string }) {
                     <MessageScrollerButton />
                 </MessageScroller>
             </MessageScrollerProvider>
+
+            {/* Always-available prompt ideas once the chat has started, so there's
+                a clickable suggestion at any point (recognition over recall). */}
+            {messages.length > 0 && (
+                <ChatSuggestions
+                    prompts={CHAT_QUICK_PROMPTS}
+                    onSelect={(text) => void sendMessage({ text })}
+                    disabled={streaming}
+                    className="flex-nowrap overflow-x-auto border-t border-border px-4 py-2.5"
+                />
+            )}
 
             <ChatComposer
                 onSend={(text) => void sendMessage({ text })}
