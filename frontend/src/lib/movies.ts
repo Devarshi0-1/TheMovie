@@ -79,6 +79,38 @@ export function searchMoviesQueryOptions(query: string) {
     })
 }
 
+// ── Genres (Discover filter) ────────────────────────────────────────────────
+
+export interface Genre {
+    id: number
+    name: string
+}
+
+const GenreListSchema = z.array(z.object({ id: z.number().int(), name: z.string() }))
+
+export async function fetchGenres(): Promise<Genre[]> {
+    return GenreListSchema.parse(await apiFetch('/api/v1/movies/genres'))
+}
+
+export const genresQueryOptions = queryOptions({
+    queryKey: ['movies', 'genres'] as const,
+    queryFn: fetchGenres,
+    // The genre list is a stable lookup — never refetch within a session.
+    staleTime: Infinity,
+})
+
+export async function discoverByGenre(genreId: number): Promise<MovieResult[]> {
+    return parseMovies(await apiFetch(`/api/v1/movies/discover?genre=${genreId}`))
+}
+
+export function discoverByGenreQueryOptions(genreId: number | undefined) {
+    return queryOptions({
+        queryKey: ['movies', 'discover', genreId ?? 0] as const,
+        queryFn: () => discoverByGenre(genreId as number),
+        enabled: typeof genreId === 'number' && genreId > 0,
+    })
+}
+
 export async function fetchSuggestions(query: string): Promise<MovieResult[]> {
     return parseMovies(await apiFetch(`/api/v1/movies/suggest?q=${encodeURIComponent(query)}`))
 }

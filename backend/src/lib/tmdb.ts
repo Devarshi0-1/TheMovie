@@ -377,6 +377,20 @@ export const discoverMoviePage = async (
     return data.results ?? []
 }
 
+// Browse movies of a single genre, popularity-ordered (powers the Discover
+// genre filter). A TMDB-proxy read like trending/search — no ingestion.
+export const discoverMoviesByGenre = async (
+    genreId: number,
+    cache: TmdbCache = redisCache,
+): Promise<MovieListItem[]> => {
+    const data = await cached(cache, `discover:genre:${genreId}`, () =>
+        fetchFromTMDB<DiscoverMovieResponse>(
+            `/discover/movie?include_adult=false&language=en-US&sort_by=popularity.desc&with_genres=${genreId}&page=1`,
+        ),
+    )
+    return data.results ?? []
+}
+
 export const getNowPlayingPage = async (
     page: number,
     cache: TmdbCache = redisCache,

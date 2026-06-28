@@ -52,4 +52,21 @@ describe('movies route input validation', () => {
         const res = await moviesRoute.request('/suggest?q=' + 'a'.repeat(201))
         expect(res.status).toBe(400)
     })
+
+    it('returns the alphabetized movie genre list (feature, no network)', async () => {
+        const res = await moviesRoute.request('/genres')
+        expect(res.status).toBe(200)
+        const genres = (await res.json()) as { id: number; name: string }[]
+        expect(genres[0]).toEqual({ id: 28, name: 'Action' })
+        expect(genres.map((g) => g.name)).toContain('Science Fiction')
+        // Alphabetized.
+        const names = genres.map((g) => g.name)
+        expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+    })
+
+    it('rejects a discover request with a missing/invalid genre (edge)', async () => {
+        expect((await moviesRoute.request('/discover')).status).toBe(400)
+        expect((await moviesRoute.request('/discover?genre=abc')).status).toBe(400)
+        expect((await moviesRoute.request('/discover?genre=0')).status).toBe(400)
+    })
 })

@@ -4,15 +4,24 @@ import { Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
+import { GenreFilter } from '../components/GenreFilter'
 import { MovieGrid } from '../components/MovieGrid'
 import { SearchBox } from '../components/SearchBox'
-import { searchMoviesQueryOptions, trendingMoviesQueryOptions } from '../lib/movies'
+import {
+    discoverByGenreQueryOptions,
+    genresQueryOptions,
+    searchMoviesQueryOptions,
+    trendingMoviesQueryOptions,
+} from '../lib/movies'
 import { TMDB_BACKDROP_BASE } from '../lib/tmdb'
 
-// `?q=` drives search; absent → trending. The trending grid is SSR-prefetched in
-// the loader via best-effort `prefetchQuery` and read with `useQuery`, while
-// search resolves on the client as the user queries.
-const searchSchema = z.object({ q: z.string().optional() })
+// Browse modes (priority): `?q=` search → `?genre=` genre browse → trending. The
+// trending grid is SSR-prefetched in the loader and read with `useQuery`; search
+// and genre browse resolve on the client.
+const searchSchema = z.object({
+    q: z.string().optional(),
+    genre: z.coerce.number().int().positive().optional(),
+})
 
 export const Route = createFileRoute('/')({
     validateSearch: searchSchema,
@@ -24,15 +33,20 @@ export const Route = createFileRoute('/')({
 })
 
 function Discover() {
-    const { q } = Route.useSearch()
+    const { q, genre } = Route.useSearch()
     const navigate = useNavigate({ from: '/' })
     const [draft, setDraft] = useState(q ?? '')
 
-    const trending = useQuery(trendingMoviesQueryOptions)
-    const search = useQuery(searchMoviesQueryOptions(q ?? ''))
-
     const committed = q?.trim() ?? ''
     const isSearching = committed.length > 0
+    // Genre browse applies only when not searching.
+    const activeGenre = isSearching ? undefined : genre
+
+    const trending = useQuery(trendingMoviesQueryOptions)
+    const search = useQuery(searchMoviesQueryOptions(q ?? ''))
+    const byGenre = useQuery(discoverByGenreQueryOptions(activeGenre))
+    const genres = useQuery(genresQueryOptions)
+    const genreName = genres.data?.find((g) => g.id === activeGenre)?.name
     // The top trending title's backdrop becomes the hero's cinematic backdrop —
     // reusing already-loaded data (no extra request). Absent on a trending miss,
     // where the gradient surface still carries the hero.
@@ -40,6 +54,7 @@ function Discover() {
 
     function commit() {
         const next = draft.trim()
+        // Searching supersedes any genre filter.
         void navigate({ search: next ? { q: next } : {} })
     }
 
@@ -47,6 +62,10 @@ function Discover() {
         setDraft(value)
         // Emptying the box returns to trending immediately.
         if (!value.trim()) void navigate({ search: {} })
+    }
+
+    function selectGenre(id?: number) {
+        void navigate({ search: id ? { genre: id } : {} })
     }
 
     return (
@@ -95,9 +114,27 @@ function Discover() {
                 </div>
             </header>
 
-            <section aria-label={isSearching ? 'Search results' : 'Trending movies'}>
+            {!isSearching && (
+                <div className="mb-8">
+                    <GenreFilter activeId={activeGenre} onSelect={selectGenre} />
+                </div>
+            )}
+
+            <section
+                aria-label={
+                    isSearching
+                        ? 'Search results'
+                        : genreName
+                          ? `${genreName} movies`
+                          : 'Trending movies'
+                }
+            >
                 <h2 className="mb-6 text-xl font-semibold tracking-tight">
-                    {isSearching ? `Results for “${committed}”` : 'Trending now'}
+                    {isSearching
+                        ? `Results for “${committed}”`
+                        : genreName
+                          ? `Top ${genreName}`
+                          : 'Trending now'}
                 </h2>
                 {isSearching ? (
                     <MovieGrid
@@ -107,6 +144,15 @@ function Discover() {
                         emptyLabel={`No movies match “${committed}”. Try another title.`}
                         errorLabel="Search failed. Please try again."
                         onRetry={() => void search.refetch()}
+                    />
+                ) : activeGenre ? (
+                    <MovieGrid
+                        movies={byGenre.data}
+                        isLoading={byGenre.isPending}
+                        isError={byGenre.isError}
+                        emptyLabel="No movies found for that genre."
+                        errorLabel="Couldn’t load that genre. Please try again."
+                        onRetry={() => void byGenre.refetch()}
                     />
                 ) : (
                     <MovieGrid

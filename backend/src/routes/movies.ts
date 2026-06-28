@@ -1,8 +1,15 @@
 import { Hono } from 'hono'
 import { MovieIdSchema } from '@themovie/schemas'
-import { getMovieDetails, getMovieExtras, getTrendingMovies, searchMovie } from '../lib/tmdb'
+import {
+    discoverMoviesByGenre,
+    getMovieDetails,
+    getMovieExtras,
+    getTrendingMovies,
+    searchMovie,
+} from '../lib/tmdb'
 import {
     DEFAULT_WATCH_REGION,
+    movieGenreList,
     toMovieDetailView,
     toMovieExtrasView,
     toMovieResults,
@@ -72,6 +79,25 @@ moviesRoute.get('/suggest', async (c) => {
     } catch (error) {
         console.error('Error fetching suggestions:', error)
         return c.json({ error: 'Failed to fetch suggestions' }, 500)
+    }
+})
+
+// The movie genres for the Discover filter chips. Static lookup, no TMDB call.
+moviesRoute.get('/genres', (c) => c.json(movieGenreList()))
+
+// Browse one genre, popularity-ordered. `genre` is a TMDB genre id.
+moviesRoute.get('/discover', async (c) => {
+    try {
+        const genreId = Number(c.req.query('genre'))
+        if (!Number.isInteger(genreId) || genreId <= 0) {
+            return c.json({ error: 'A valid "genre" id is required' }, 400)
+        }
+
+        const results = await discoverMoviesByGenre(genreId)
+        return c.json(toMovieResults(results))
+    } catch (error) {
+        console.error('Error discovering movies by genre:', error)
+        return c.json({ error: 'Failed to fetch movies for that genre' }, 500)
     }
 })
 
