@@ -164,15 +164,26 @@ describe('review schema', () => {
         const cfg = getTableConfig(review)
         const cols = cfg.columns.map((c) => c.name).sort()
         expect(cols).toEqual(
-            ['id', 'user_id', 'movie_id', 'rating', 'content', 'created_at', 'updated_at'].sort(),
+            [
+                'id',
+                'user_id',
+                'movie_id',
+                'media_type',
+                'rating',
+                'content',
+                'created_at',
+                'updated_at',
+            ].sort(),
         )
         expect(cfg.columns.find((c) => c.name === 'content')?.notNull).toBe(true)
         expect(cfg.columns.find((c) => c.name === 'rating')?.notNull).toBe(false)
+        // media_type is required and defaults to 'movie' (backfills existing rows).
+        expect(cfg.columns.find((c) => c.name === 'media_type')?.notNull).toBe(true)
     })
 
-    it('is indexed by movie for the per-movie listing (feature)', () => {
+    it('is indexed by (mediaType, movie) for the per-title listing (feature)', () => {
         const cfg = getTableConfig(review)
-        expect(cfg.indexes.find((i) => i.config.name === 'review_movie_idx')).toBeDefined()
+        expect(cfg.indexes.find((i) => i.config.name === 'review_media_idx')).toBeDefined()
     })
 })
 

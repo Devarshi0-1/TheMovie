@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Check, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import type { MediaType } from '@themovie/schemas'
 import { Button } from '@/components/ui/button'
 import { useSession } from '../lib/auth'
 import {
@@ -14,19 +15,27 @@ interface WatchlistButtonProps {
     movieId: number
     title: string
     posterPath: string | null
+    /** 'movie' (default) | 'tv' — keeps a film and a show with the same id distinct. */
+    mediaType?: MediaType
 }
 
 /**
- * Toggles a movie on/off the signed-in user's watchlist. When signed out it
- * becomes a "Sign in to save" link that returns to this movie after auth.
+ * Toggles a movie/show on/off the signed-in user's watchlist. When signed out it
+ * becomes a "Sign in to save" link that returns to this title after auth.
  * Membership comes from `GET /watchlist/:id/status` (only queried when signed
  * in) and the add/remove mutations keep that cache in sync.
  */
-export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonProps) {
+export function WatchlistButton({
+    movieId,
+    title,
+    posterPath,
+    mediaType = 'movie',
+}: WatchlistButtonProps) {
     const { data: user, isPending: sessionPending } = useSession()
     const signedIn = Boolean(user)
+    const detailPath = mediaType === 'tv' ? `/tv/${movieId}` : `/movie/${movieId}`
 
-    const statusQuery = useQuery(watchlistStatusQueryOptions(movieId, signedIn))
+    const statusQuery = useQuery(watchlistStatusQueryOptions(movieId, mediaType, signedIn))
     const add = useAddToWatchlist()
     const remove = useRemoveFromWatchlist()
 
@@ -41,7 +50,7 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
     if (!signedIn) {
         return (
             <Button asChild variant="outline">
-                <Link to="/signin" search={{ redirect: `/movie/${movieId}` }}>
+                <Link to="/signin" search={{ redirect: detailPath }}>
                     Sign in to save
                 </Link>
             </Button>
@@ -57,26 +66,29 @@ export function WatchlistButton({ movieId, title, posterPath }: WatchlistButtonP
         // which reuses these hooks for batch changes, keeps its own inline outcome
         // instead of firing one toast per movie.
         if (inList) {
-            remove.mutate(movieId, {
-                // Removal is reversible: a neutral toast offers Undo (NN/g "user
-                // control & freedom") which re-adds via the same add mutation.
-                onSuccess: () =>
-                    toast(`Removed “${title}” from your watchlist`, {
-                        duration: 6000,
-                        action: {
-                            label: 'Undo',
-                            onClick: () =>
-                                add.mutate(
-                                    { movieId, title, posterPath },
-                                    { onError: () => toast.error('Couldn’t undo. Try again.') },
-                                ),
-                        },
-                    }),
-                onError: () => toast.error(`Couldn’t remove “${title}”. Try again.`),
-            })
+            remove.mutate(
+                { movieId, mediaType },
+                {
+                    // Removal is reversible: a neutral toast offers Undo (NN/g "user
+                    // control & freedom") which re-adds via the same add mutation.
+                    onSuccess: () =>
+                        toast(`Removed “${title}” from your watchlist`, {
+                            duration: 6000,
+                            action: {
+                                label: 'Undo',
+                                onClick: () =>
+                                    add.mutate(
+                                        { movieId, title, posterPath, mediaType },
+                                        { onError: () => toast.error('Couldn’t undo. Try again.') },
+                                    ),
+                            },
+                        }),
+                    onError: () => toast.error(`Couldn’t remove “${title}”. Try again.`),
+                },
+            )
         } else {
             add.mutate(
-                { movieId, title, posterPath },
+                { movieId, title, posterPath, mediaType },
                 {
                     onSuccess: () => toast.success(`Added “${title}” to your watchlist`),
                     onError: () => toast.error(`Couldn’t add “${title}”. Try again.`),

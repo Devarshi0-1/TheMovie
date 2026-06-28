@@ -78,6 +78,13 @@
       "when": 1782641149711,
       "tag": "0010_add_tv_shows",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782644336272,
+      "tag": "0011_add_media_type_discriminator",
+      "breakpoints": true
     }
   ]
 }

@@ -201,6 +201,19 @@ export function tvExtrasQueryOptions(id: number) {
     })
 }
 
+export async function fetchTvSummary(id: number): Promise<ReviewSummary> {
+    return ReviewSummarySchema.parse(await apiFetch(`/api/v1/tv/${id}/summary`))
+}
+
+export function tvSummaryQueryOptions(id: number) {
+    return queryOptions({
+        queryKey: ['tv', 'summary', id] as const,
+        queryFn: () => fetchTvSummary(id),
+        // Summaries are an LLM call cached server-side for days; don't refetch eagerly.
+        staleTime: 60 * 60_000,
+    })
+}
+
 export async function fetchMovieDetails(id: number): Promise<MovieDetailView> {
     return MovieDetailViewSchema.parse(await apiFetch(`/api/v1/movies/${id}`))
 }

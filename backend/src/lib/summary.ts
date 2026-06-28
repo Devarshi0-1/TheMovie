@@ -2,12 +2,12 @@ import { openai } from '@ai-sdk/openai'
 import { generateObject } from 'ai'
 import { eq } from 'drizzle-orm'
 import { db } from '../db'
-import { movies } from '../db/schema'
+import { movies, tvShows } from '../db/schema'
 import { redis } from './redis'
-import { getMovieReviewMeta } from './tmdb'
+import { getMovieReviewMeta, getTvReviewMeta } from './tmdb'
 import { composeSummaryEmbeddingText, contentHashFor, embedText } from './embeddings'
 import { logUsage, normalizeUsage } from './usage'
-import { ReviewSummarySchema, type ReviewSummary } from '@themovie/schemas'
+import { ReviewSummarySchema, type MediaType, type ReviewSummary } from '@themovie/schemas'
 
 // Bounded summarization runs on the cheap model (a cost rule). Postgres is the
 // durable source of truth for the summary + its reception embedding; Redis is a
@@ -25,8 +25,6 @@ const EMPTY_TTL_SECONDS = 60 * 60 * 6
 // Cap what we send to the model: a handful of reviews, bounded total length.
 const MAX_REVIEWS = 8
 const REVIEW_CHAR_BUDGET = 12_000
-
-const cacheKey = (movieId: number) => `movie:${movieId}:summary`
 
 const EMPTY_SUMMARY: ReviewSummary = {
     vibe: 'No audience reviews yet.',
@@ -66,20 +64,31 @@ export interface StoredSummaryRecord {
 
 /** IO seams, injected so the service is testable without TMDB / OpenAI / DB / Redis. */
 export interface SummaryDeps {
-    fetchReviewMeta: (movieId: number) => Promise<{ totalResults: number; reviews: string[] }>
+    /** Redis cache key for a given id (namespaced by media type). */
+    cacheKey: (id: number) => string
+    fetchReviewMeta: (id: number) => Promise<{ totalResults: number; reviews: string[] }>
     summarize: (reviewsText: string) => Promise<ReviewSummary>
     embedSummary: (text: string) => Promise<number[]>
-    /** Durable read: the stored real summary for a movie, or null if none. */
-    loadStored: (movieId: number) => Promise<ReviewSummary | null>
+    /** Durable read: the stored real summary for a title, or null if none. */
+    loadStored: (id: number) => Promise<ReviewSummary | null>
     /** Durable write: persist a real summary + reception vector (best-effort). */
-    saveStored: (movieId: number, record: StoredSummaryRecord) => Promise<void>
+    saveStored: (id: number, record: StoredSummaryRecord) => Promise<void>
     cacheGet: (key: string) => Promise<string | null>
     cacheSet: (key: string, value: string, ttlSeconds: number) => Promise<void>
 }
 
-export function summaryDeps(): SummaryDeps {
+/**
+ * Deps for the given media type. The TV path mirrors the movie path exactly —
+ * same summarize/embed/cache logic, only the catalog table (`tv_shows`), the
+ * TMDB review fetcher, and the cache-key prefix differ. `tv_shows` mirrors
+ * `movies`' review-summary columns 1:1, so the table is cast to the movies shape
+ * for the (identical) read/write queries.
+ */
+export function summaryDeps(mediaType: MediaType = 'movie'): SummaryDeps {
+    const table = (mediaType === 'tv' ? tvShows : movies) as typeof movies
     return {
-        fetchReviewMeta: getMovieReviewMeta,
+        cacheKey: (id) => `${mediaType}:${id}:summary`,
+        fetchReviewMeta: mediaType === 'tv' ? getTvReviewMeta : getMovieReviewMeta,
         async summarize(reviewsText) {
             const { object, usage } = await generateObject({
                 model: openai(SUMMARY_MODEL),
@@ -95,14 +104,14 @@ export function summaryDeps(): SummaryDeps {
         // Cache-aware (content-hashed) embed: an unchanged summary is never
         // re-embedded — the embeddings layer serves it from cache.
         embedSummary: (text) => embedText(text),
-        async loadStored(movieId) {
+        async loadStored(id) {
             const [row] = await db
                 .select({
-                    summary: movies.reviewSummary,
-                    reviewCount: movies.reviewCountAtSummary,
+                    summary: table.reviewSummary,
+                    reviewCount: table.reviewCountAtSummary,
                 })
-                .from(movies)
-                .where(eq(movies.tmdbId, movieId))
+                .from(table)
+                .where(eq(table.tmdbId, id))
                 .limit(1)
 
             // A row with no stored summary, or only the no-reviews placeholder
@@ -112,17 +121,17 @@ export function summaryDeps(): SummaryDeps {
 
             const parsed = ReviewSummarySchema.safeParse(row.summary)
             if (!parsed.success) {
-                console.warn(`⚠️ Corrupt stored summary for movie ${movieId}; regenerating.`)
+                console.warn(`⚠️ Corrupt stored summary for ${mediaType} ${id}; regenerating.`)
                 return null
             }
             return parsed.data
         },
-        async saveStored(movieId, record) {
-            // Best-effort UPDATE on the catalog row. Affects 0 rows when the movie
+        async saveStored(id, record) {
+            // Best-effort UPDATE on the catalog row. Affects 0 rows when the title
             // isn't in our catalog yet (summary still served + Redis-cached) — the
             // reception vector only matters for catalog rows semantic search scans.
             await db
-                .update(movies)
+                .update(table)
                 .set({
                     reviewSummary: record.summary,
                     reviewSummaryEmbedding: record.embedding,
@@ -130,7 +139,7 @@ export function summaryDeps(): SummaryDeps {
                     reviewCountAtSummary: record.reviewCount,
                     reviewSummaryAt: new Date(),
                 })
-                .where(eq(movies.tmdbId, movieId))
+                .where(eq(table.tmdbId, id))
         },
         cacheGet: (key) => redis.get(key),
         async cacheSet(key, value, ttlSeconds) {
@@ -170,7 +179,7 @@ export async function generateAndStoreSummary(
         console.error(`⚠️ Failed to persist summary for movie ${movieId}:`, err)
     }
 
-    await deps.cacheSet(cacheKey(movieId), JSON.stringify(summary), SUMMARY_TTL_SECONDS)
+    await deps.cacheSet(deps.cacheKey(movieId), JSON.stringify(summary), SUMMARY_TTL_SECONDS)
     return summary
 }
 
@@ -186,7 +195,7 @@ export async function summarizeReviews(
     movieId: number,
     deps: SummaryDeps = summaryDeps(),
 ): Promise<ReviewSummary> {
-    const key = cacheKey(movieId)
+    const key = deps.cacheKey(movieId)
 
     // 1. Hot cache (Redis).
     const cached = await deps.cacheGet(key)

@@ -28,9 +28,10 @@ function jsonResponse(body: unknown, status = 200) {
 function mockApi(inWatchlist: boolean) {
     const spy = vi.fn((url: string, init?: RequestInit) => {
         const method = init?.method ?? 'GET'
+        const mediaType = url.includes('mediaType=tv') ? 'tv' : 'movie'
         if (url.includes('/status')) return jsonResponse({ inWatchlist })
-        if (method === 'POST') return jsonResponse({ added: true, movieId: 550 }, 201)
-        if (method === 'DELETE') return jsonResponse({ removed: true, movieId: 550 })
+        if (method === 'POST') return jsonResponse({ added: true, movieId: 550, mediaType }, 201)
+        if (method === 'DELETE') return jsonResponse({ removed: true, movieId: 550, mediaType })
         return jsonResponse({})
     })
     vi.stubGlobal('fetch', spy)
@@ -139,5 +140,30 @@ describe('<WatchlistButton />', () => {
 
         expect(await screen.findByText('Sign in to save')).toBeInTheDocument()
         expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    })
+
+    it('signed-out sign-in link returns to the TV detail page for a show (edge: mediaType)', async () => {
+        const qc = makeTestQueryClient()
+        qc.setQueryData(sessionQueryKey, null)
+        renderWithProviders(<WatchlistButton {...PROPS} mediaType="tv" />, qc)
+
+        const link = await screen.findByRole('link', { name: 'Sign in to save' })
+        expect(link).toHaveAttribute('href', expect.stringContaining('redirect=%2Ftv%2F550'))
+    })
+
+    // ── Feature: TV add scopes the request to the tv media type ───────────
+    it('adds a show under the tv media type (POST + status carry mediaType=tv)', async () => {
+        const spy = mockApi(false)
+        renderWithProviders(<WatchlistButton {...PROPS} mediaType="tv" />, signedInClient())
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Add to watchlist' }))
+
+        await waitFor(() =>
+            expect(toast.success).toHaveBeenCalledWith('Added “Fight Club” to your watchlist'),
+        )
+        // The membership status read is scoped to the tv media type.
+        expect(
+            spy.mock.calls.some(([url]) => url.includes('/status') && url.includes('mediaType=tv')),
+        ).toBe(true)
     })
 })

@@ -24,25 +24,29 @@ function WatchlistScreen() {
     // Removal is reversible: a neutral toast offers Undo (NN/g "user control &
     // freedom"), which re-adds the entry via the same add mutation.
     function removeWithUndo(entry: WatchlistEntry) {
-        remove.mutate(entry.movieId, {
-            onSuccess: () =>
-                toast(`Removed “${entry.title}” from your watchlist`, {
-                    duration: 6000,
-                    action: {
-                        label: 'Undo',
-                        onClick: () =>
-                            add.mutate(
-                                {
-                                    movieId: entry.movieId,
-                                    title: entry.title,
-                                    posterPath: entry.posterPath,
-                                },
-                                { onError: () => toast.error('Couldn’t undo. Try again.') },
-                            ),
-                    },
-                }),
-            onError: () => toast.error(`Couldn’t remove “${entry.title}”. Try again.`),
-        })
+        remove.mutate(
+            { movieId: entry.movieId, mediaType: entry.mediaType },
+            {
+                onSuccess: () =>
+                    toast(`Removed “${entry.title}” from your watchlist`, {
+                        duration: 6000,
+                        action: {
+                            label: 'Undo',
+                            onClick: () =>
+                                add.mutate(
+                                    {
+                                        movieId: entry.movieId,
+                                        title: entry.title,
+                                        posterPath: entry.posterPath,
+                                        mediaType: entry.mediaType,
+                                    },
+                                    { onError: () => toast.error('Couldn’t undo. Try again.') },
+                                ),
+                        },
+                    }),
+                onError: () => toast.error(`Couldn’t remove “${entry.title}”. Try again.`),
+            },
+        )
     }
 
     return (
@@ -90,9 +94,14 @@ function WatchlistScreen() {
                             releaseDate: null,
                             genres: [],
                             posterPath: entry.posterPath,
+                            // Carry the media type so the card routes to /tv/:id vs /movie/:id.
+                            mediaType: entry.mediaType,
                         }
                         return (
-                            <article key={entry.movieId} className="flex flex-col gap-2">
+                            <article
+                                key={`${entry.mediaType}-${entry.movieId}`}
+                                className="flex flex-col gap-2"
+                            >
                                 <MovieCardLink movie={movie} />
                                 <Button
                                     type="button"

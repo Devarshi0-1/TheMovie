@@ -90,7 +90,7 @@ describe('<ChatWindow />', () => {
     it('approving a watchlist proposal applies it and feeds the result back via addToolResult', async () => {
         vi.stubGlobal(
             'fetch',
-            vi.fn(() => jsonResponse({ added: true, movieId: 27205 }, 201)),
+            vi.fn(() => jsonResponse({ added: true, movieId: 27205, mediaType: 'movie' }, 201)),
         )
         const addToolResult = vi.fn()
         vi.mocked(useChat).mockReturnValue(

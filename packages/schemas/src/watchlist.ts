@@ -1,13 +1,20 @@
 import { z } from 'zod'
+import { MediaTypeSchema } from './movie'
 
 // Shared watchlist schemas — REST request/response validation, the agent tool
 // input, and (later) the frontend. Lifts to `packages/schemas/` in Phase 7.1.
+//
+// `movieId` holds a TMDB id; since TMDB namespaces ids by media type (movie 1396
+// ≠ tv 1396), every entry also carries a `mediaType` discriminator. It defaults
+// to 'movie' on input so existing movie clients keep working unchanged (Phase
+// 10.3).
 
-/** Body for adding a movie to the watchlist. */
+/** Body for adding a movie/show to the watchlist. */
 export const WatchlistAddSchema = z.object({
     movieId: z.number().int().positive(),
     title: z.string().min(1),
     posterPath: z.string().nullable().optional(),
+    mediaType: MediaTypeSchema.default('movie'),
 })
 export type WatchlistAdd = z.infer<typeof WatchlistAddSchema>
 
@@ -16,6 +23,7 @@ export const WatchlistEntrySchema = z.object({
     movieId: z.number().int(),
     title: z.string(),
     posterPath: z.string().nullable(),
+    mediaType: MediaTypeSchema,
     createdAt: z.string(),
 })
 export type WatchlistEntry = z.infer<typeof WatchlistEntrySchema>
@@ -32,6 +40,7 @@ export type WatchlistStatus = z.infer<typeof WatchlistStatusSchema>
 export const WatchlistAddResultSchema = z.object({
     added: z.boolean(),
     movieId: z.number().int(),
+    mediaType: MediaTypeSchema,
 })
 export type WatchlistAddResult = z.infer<typeof WatchlistAddResultSchema>
 
@@ -39,6 +48,7 @@ export type WatchlistAddResult = z.infer<typeof WatchlistAddResultSchema>
 export const WatchlistRemoveResultSchema = z.object({
     removed: z.boolean(),
     movieId: z.number().int(),
+    mediaType: MediaTypeSchema,
 })
 export type WatchlistRemoveResult = z.infer<typeof WatchlistRemoveResultSchema>
 

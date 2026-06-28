@@ -49,7 +49,7 @@ afterEach(() => {
 describe('<WatchlistConfirm />', () => {
     // ── Feature / happy path ──────────────────────────────────────────────
     it('renders a single proposed add and approving POSTs then resolves "added" (feature)', async () => {
-        const spy = mockFetch(() => jsonResponse({ added: true, movieId: 27205 }, 201))
+        const spy = mockFetch(() => jsonResponse({ added: true, movieId: 27205, mediaType: 'movie' }, 201))
         const onResolve = vi.fn()
         renderConfirm(addInput, onResolve)
 
@@ -66,7 +66,7 @@ describe('<WatchlistConfirm />', () => {
     })
 
     it('adds a whole batch on a single approval — one POST per movie (feature)', async () => {
-        const spy = mockFetch(() => jsonResponse({ added: true, movieId: 1 }, 201))
+        const spy = mockFetch(() => jsonResponse({ added: true, movieId: 1, mediaType: 'movie' }, 201))
         const onResolve = vi.fn()
         renderConfirm(batchAddInput, onResolve)
 
@@ -89,7 +89,7 @@ describe('<WatchlistConfirm />', () => {
     })
 
     it('approving a remove proposal DELETEs then resolves "removed" (feature)', async () => {
-        const spy = mockFetch(() => jsonResponse({ removed: true, movieId: 27205 }))
+        const spy = mockFetch(() => jsonResponse({ removed: true, movieId: 27205, mediaType: 'movie' }))
         const onResolve = vi.fn()
         renderConfirm(removeInput, onResolve)
 
@@ -135,7 +135,7 @@ describe('<WatchlistConfirm />', () => {
         mockFetch(() =>
             n++ === 0
                 ? jsonResponse({ error: 'nope' }, 401)
-                : jsonResponse({ added: true, movieId: 9 }, 201),
+                : jsonResponse({ added: true, movieId: 9, mediaType: 'movie' }, 201),
         )
         const onResolve = vi.fn()
         renderConfirm(batchAddInput, onResolve)
@@ -172,7 +172,7 @@ describe('<WatchlistConfirm />', () => {
         const applying = await screen.findByRole('button', { name: 'Applying…' })
         expect(applying).toBeDisabled()
 
-        release(jsonResponse({ added: true, movieId: 27205 }, 201))
+        release(jsonResponse({ added: true, movieId: 27205, mediaType: 'movie' }, 201))
         await waitFor(() => expect(onResolve).toHaveBeenCalled())
     })
 })
