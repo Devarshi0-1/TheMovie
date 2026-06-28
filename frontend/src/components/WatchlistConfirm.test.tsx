@@ -49,7 +49,9 @@ afterEach(() => {
 describe('<WatchlistConfirm />', () => {
     // ── Feature / happy path ──────────────────────────────────────────────
     it('renders a single proposed add and approving POSTs then resolves "added" (feature)', async () => {
-        const spy = mockFetch(() => jsonResponse({ added: true, movieId: 27205, mediaType: 'movie' }, 201))
+        const spy = mockFetch(() =>
+            jsonResponse({ added: true, movieId: 27205, mediaType: 'movie' }, 201),
+        )
         const onResolve = vi.fn()
         renderConfirm(addInput, onResolve)
 
@@ -66,7 +68,9 @@ describe('<WatchlistConfirm />', () => {
     })
 
     it('adds a whole batch on a single approval — one POST per movie (feature)', async () => {
-        const spy = mockFetch(() => jsonResponse({ added: true, movieId: 1, mediaType: 'movie' }, 201))
+        const spy = mockFetch(() =>
+            jsonResponse({ added: true, movieId: 1, mediaType: 'movie' }, 201),
+        )
         const onResolve = vi.fn()
         renderConfirm(batchAddInput, onResolve)
 
@@ -88,8 +92,45 @@ describe('<WatchlistConfirm />', () => {
         expect(spy).toHaveBeenCalledTimes(3) // one REST add per movie
     })
 
+    it('applies a proposed TV show against the TV watchlist (feature: TV parity)', async () => {
+        const spy = mockFetch(() =>
+            jsonResponse({ added: true, movieId: 1396, mediaType: 'tv' }, 201),
+        )
+        const onResolve = vi.fn()
+        renderConfirm(
+            { action: 'add', movies: [{ movieId: 1396, title: 'Breaking Bad', mediaType: 'tv' }] },
+            onResolve,
+        )
+
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, add it' }))
+        await waitFor(() => expect(onResolve).toHaveBeenCalled())
+
+        // The POST body carries mediaType 'tv' so it lands on the TV watchlist.
+        const body = JSON.parse(spy.mock.calls[0]![1]!.body as string)
+        expect(body.mediaType).toBe('tv')
+    })
+
+    it('removes a proposed TV show via the TV-scoped DELETE (edge: TV remove)', async () => {
+        const spy = mockFetch(() => jsonResponse({ removed: true, movieId: 1396, mediaType: 'tv' }))
+        const onResolve = vi.fn()
+        renderConfirm(
+            {
+                action: 'remove',
+                movies: [{ movieId: 1396, title: 'Breaking Bad', mediaType: 'tv' }],
+            },
+            onResolve,
+        )
+
+        fireEvent.click(screen.getByRole('button', { name: 'Yes, remove it' }))
+        await waitFor(() => expect(onResolve).toHaveBeenCalled())
+
+        expect(spy.mock.calls[0]![0]).toContain('mediaType=tv')
+    })
+
     it('approving a remove proposal DELETEs then resolves "removed" (feature)', async () => {
-        const spy = mockFetch(() => jsonResponse({ removed: true, movieId: 27205, mediaType: 'movie' }))
+        const spy = mockFetch(() =>
+            jsonResponse({ removed: true, movieId: 27205, mediaType: 'movie' }),
+        )
         const onResolve = vi.fn()
         renderConfirm(removeInput, onResolve)
 

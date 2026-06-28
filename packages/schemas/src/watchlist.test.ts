@@ -54,6 +54,17 @@ describe('ManageWatchlistInputSchema', () => {
         ).toBe('remove')
     })
 
+    it('defaults each item to movie and accepts a tv item (feature: TV parity)', () => {
+        const parsed = ManageWatchlistInputSchema.parse({
+            action: 'add',
+            movies: [
+                { movieId: 5, title: 'Dune' },
+                { movieId: 1396, title: 'Breaking Bad', mediaType: 'tv' },
+            ],
+        })
+        expect(parsed.movies.map((m) => m.mediaType)).toEqual(['movie', 'tv'])
+    })
+
     it('rejects an unknown action and an empty movie list (edge)', () => {
         expect(() =>
             ManageWatchlistInputSchema.parse({ action: 'clear', movies: [{ movieId: 5 }] }),

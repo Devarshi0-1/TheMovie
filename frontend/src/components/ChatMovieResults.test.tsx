@@ -23,6 +23,16 @@ describe('<ChatMovieResults />', () => {
         expect(screen.getByText('8.4')).toBeInTheDocument()
     })
 
+    it('routes a TV result to its /tv/:id detail page (feature: TV parity)', async () => {
+        renderWithProviders(
+            <ChatMovieResults
+                movies={[movie({ tmdbId: 1396, title: 'Breaking Bad', mediaType: 'tv' })]}
+            />,
+        )
+        const link = await screen.findByRole('link', { name: 'Breaking Bad' })
+        expect(link).toHaveAttribute('href', '/tv/1396')
+    })
+
     it('omits the rating chip when the score is missing or zero (edge)', async () => {
         renderWithProviders(<ChatMovieResults movies={[movie({ voteAverage: 0 })]} />)
         await screen.findByRole('link', { name: 'Inception' })

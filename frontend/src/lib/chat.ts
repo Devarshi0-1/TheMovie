@@ -78,6 +78,12 @@ export const TOOL_LABELS: Record<string, { running: string; done: string }> = {
     summarize_reviews: { running: 'Summarizing reviews', done: 'Summarized reviews' },
     get_user_watchlist: { running: 'Reading your watchlist', done: 'Read your watchlist' },
     get_recommendations: { running: 'Building recommendations', done: 'Built recommendations' },
+    // TV parity (Phase 10.4) — same trail, over the TV catalog.
+    search_tv_sql: { running: 'Searching TV shows', done: 'Searched TV shows' },
+    semantic_search_tv: { running: 'Searching TV by theme', done: 'Searched TV by theme' },
+    fetch_tv_from_tmdb: { running: 'Checking TMDB for TV', done: 'Checked TMDB for TV' },
+    get_trending_tv: { running: 'Loading trending TV', done: 'Loaded trending TV' },
+    summarize_tv_reviews: { running: 'Summarizing TV reviews', done: 'Summarized TV reviews' },
 }
 
 export function toolLabel(name: string, done: boolean): string {
