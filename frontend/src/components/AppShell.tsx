@@ -12,7 +12,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { movieDetailsQueryOptions } from '../lib/movies'
+import { movieDetailsQueryOptions, tvDetailsQueryOptions } from '../lib/movies'
 import { useFocusOnNavigate } from '../lib/navigation'
 import { AppSidebar } from './AppSidebar'
 import { CommandSearch } from './CommandSearch'
@@ -24,21 +24,29 @@ interface Crumb {
     to?: string
 }
 
-// The breadcrumb trail for a path: Discover is the root, then the current page
-// (the movie's title on a detail route, otherwise the capitalized segment).
-export function buildCrumbs(pathname: string, movieTitle?: string): Crumb[] {
+// The breadcrumb trail for a path: Discover is the root, then the current page —
+// the movie/show title on a detail route, "TV Shows" for the TV browse page,
+// otherwise the capitalized segment.
+export function buildCrumbs(pathname: string, detailTitle?: string): Crumb[] {
     if (pathname === '/') return [{ label: 'Discover' }]
-    const segment = pathname.split('/').filter(Boolean)[0] ?? ''
-    const current =
-        segment === 'movie'
-            ? (movieTitle ?? 'Movie')
-            : segment.charAt(0).toUpperCase() + segment.slice(1)
+    const segments = pathname.split('/').filter(Boolean)
+    const segment = segments[0] ?? ''
+    let current: string
+    if (segment === 'movie') current = detailTitle ?? 'Movie'
+    else if (segment === 'tv') current = segments.length > 1 ? (detailTitle ?? 'Show') : 'TV Shows'
+    else current = segment.charAt(0).toUpperCase() + segment.slice(1)
     return [{ label: 'Discover', to: '/' }, { label: current }]
 }
 
 /** The movie id for a `/movie/:id` path, else null. */
 export function movieIdFromPath(pathname: string): number | null {
     const match = /^\/movie\/(\d+)/.exec(pathname)
+    return match ? Number(match[1]) : null
+}
+
+/** The TV id for a `/tv/:id` path, else null. */
+export function tvIdFromPath(pathname: string): number | null {
+    const match = /^\/tv\/(\d+)/.exec(pathname)
     return match ? Number(match[1]) : null
 }
 
@@ -58,14 +66,17 @@ export function AppShell() {
     const pathname = useRouterState({ select: (s) => s.location.pathname })
     const mainRef = useFocusOnNavigate<HTMLDivElement>()
 
-    // On a movie route, read the (already loader-cached) details so the breadcrumb
-    // can show the title instead of a generic "Movie". Disabled off that route.
+    // On a movie/TV detail route, read the (already loader-cached) details so the
+    // breadcrumb shows the title instead of a generic "Movie"/"Show". Each query
+    // is disabled off its route.
     const movieId = movieIdFromPath(pathname)
+    const tvId = tvIdFromPath(pathname)
     const movieQuery = useQuery({
         ...movieDetailsQueryOptions(movieId ?? 0),
         enabled: movieId !== null,
     })
-    const crumbs = buildCrumbs(pathname, movieQuery.data?.title)
+    const tvQuery = useQuery({ ...tvDetailsQueryOptions(tvId ?? 0), enabled: tvId !== null })
+    const crumbs = buildCrumbs(pathname, movieQuery.data?.title ?? tvQuery.data?.title)
 
     return (
         <TooltipProvider>

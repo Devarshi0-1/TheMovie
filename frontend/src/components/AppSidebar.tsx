@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
-import { Bookmark, Compass, MessageCircle } from 'lucide-react'
+import { Bookmark, Compass, MessageCircle, Tv } from 'lucide-react'
 import {
     Sidebar,
     SidebarContent,
@@ -15,6 +15,7 @@ import {
 // others are prefix-active (so `/movie/:id` keeps Discover lit, etc.).
 const NAV_ITEMS = [
     { to: '/', label: 'Discover', icon: Compass, exact: true },
+    { to: '/tv', label: 'TV Shows', icon: Tv, exact: false },
     { to: '/chat', label: 'Chat', icon: MessageCircle, exact: false },
     { to: '/watchlist', label: 'Watchlist', icon: Bookmark, exact: false },
 ] as const
