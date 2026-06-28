@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { sessionQueryKey } from '../lib/auth'
 import { makeTestQueryClient, renderWithProviders } from '../test/providers'
-import { AppShell, buildCrumbs, movieIdFromPath } from './AppShell'
+import { AppShell, buildCrumbs, movieIdFromPath, tvIdFromPath } from './AppShell'
 
 describe('breadcrumb helpers', () => {
     it('builds a single Discover crumb at the root', () => {
@@ -28,6 +28,22 @@ describe('breadcrumb helpers', () => {
         expect(movieIdFromPath('/movie/27205')).toBe(27205)
         expect(movieIdFromPath('/watchlist')).toBeNull()
         expect(movieIdFromPath('/movie/abc')).toBeNull()
+    })
+
+    it('labels the TV browse page and uses the show title on a TV detail route', () => {
+        expect(buildCrumbs('/tv')).toEqual([{ label: 'Discover', to: '/' }, { label: 'TV Shows' }])
+        expect(buildCrumbs('/tv/1396', 'Breaking Bad')).toEqual([
+            { label: 'Discover', to: '/' },
+            { label: 'Breaking Bad' },
+        ])
+        // No title yet → a generic "Show" placeholder on the detail route.
+        expect(buildCrumbs('/tv/1396')[1]).toEqual({ label: 'Show' })
+    })
+
+    it('extracts the tv id only from a /tv/:id path (edge)', () => {
+        expect(tvIdFromPath('/tv/1396')).toBe(1396)
+        expect(tvIdFromPath('/tv')).toBeNull()
+        expect(tvIdFromPath('/movie/27205')).toBeNull()
     })
 })
 

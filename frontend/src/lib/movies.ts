@@ -95,6 +95,57 @@ export function suggestMoviesQueryOptions(query: string) {
     })
 }
 
+// ── TV shows ────────────────────────────────────────────────────────────────
+// TV reuses the SAME shared shapes (MovieResult / MovieDetailView, with
+// mediaType: 'tv') so it flows through the same grid/card/detail UI. These hit
+// the /tv proxy endpoints; there's no TV semantic search or review summary.
+
+export async function fetchTrendingTv(): Promise<MovieResult[]> {
+    return parseMovies(await apiFetch('/api/v1/tv/trending'))
+}
+
+export const trendingTvQueryOptions = queryOptions({
+    queryKey: ['tv', 'trending'] as const,
+    queryFn: fetchTrendingTv,
+})
+
+export async function searchTv(query: string): Promise<MovieResult[]> {
+    return parseMovies(await apiFetch(`/api/v1/tv/search?q=${encodeURIComponent(query)}`))
+}
+
+export function searchTvQueryOptions(query: string) {
+    const q = query.trim()
+    return queryOptions({
+        queryKey: ['tv', 'search', q] as const,
+        queryFn: () => searchTv(q),
+        enabled: q.length > 0,
+    })
+}
+
+export async function fetchTvDetails(id: number): Promise<MovieDetailView> {
+    return MovieDetailViewSchema.parse(await apiFetch(`/api/v1/tv/${id}`))
+}
+
+export function tvDetailsQueryOptions(id: number) {
+    return queryOptions({
+        queryKey: ['tv', 'details', id] as const,
+        queryFn: () => fetchTvDetails(id),
+        staleTime: Infinity,
+    })
+}
+
+export async function fetchTvExtras(id: number): Promise<MovieExtras> {
+    return MovieExtrasSchema.parse(await apiFetch(`/api/v1/tv/${id}/extras`))
+}
+
+export function tvExtrasQueryOptions(id: number) {
+    return queryOptions({
+        queryKey: ['tv', 'extras', id] as const,
+        queryFn: () => fetchTvExtras(id),
+        staleTime: 60 * 60_000,
+    })
+}
+
 export async function fetchMovieDetails(id: number): Promise<MovieDetailView> {
     return MovieDetailViewSchema.parse(await apiFetch(`/api/v1/movies/${id}`))
 }
