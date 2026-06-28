@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppUIMessage } from '../lib/chat'
-import { makeTestQueryClient } from '../test/providers'
+import { makeTestQueryClient, renderWithProviders } from '../test/providers'
 import { ChatMessage } from './ChatMessage'
 
 const msg = (role: string, parts: unknown[]): AppUIMessage =>
@@ -51,6 +51,35 @@ describe('<ChatMessage />', () => {
             />,
         )
         expect(screen.getByText('Searched the catalog')).toBeInTheDocument()
+    })
+
+    it('renders the retrieved movies as clickable cards (feature)', async () => {
+        // The card strip uses TanStack <Link>, so mount with the router harness.
+        renderWithProviders(
+            <ChatMessage
+                message={msg('assistant', [
+                    { type: 'text', text: 'Here are some picks.' },
+                    {
+                        type: 'tool-search_movies_sql',
+                        toolCallId: 't1',
+                        state: 'output-available',
+                        output: [
+                            {
+                                tmdbId: 693134,
+                                title: 'Dune: Part Two',
+                                overview: null,
+                                releaseDate: '2024-02-27',
+                                genres: [],
+                                posterPath: null,
+                            },
+                        ],
+                    },
+                ])}
+                onToolResult={noop}
+            />,
+        )
+        const link = await screen.findByRole('link', { name: 'Dune: Part Two' })
+        expect(link).toHaveAttribute('href', '/movie/693134')
     })
 
     // ── HITL ──────────────────────────────────────────────────────────────

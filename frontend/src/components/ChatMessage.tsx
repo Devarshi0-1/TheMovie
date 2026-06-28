@@ -1,12 +1,14 @@
 import { Bubble, BubbleContent } from '@/components/ui/bubble'
 import { Message, MessageContent, MessageHeader } from '@/components/ui/message'
 import {
+    extractSuggestedMovies,
     isToolPart,
     MANAGE_WATCHLIST,
     toolNameOf,
     type AppUIMessage,
     type ManageWatchlistOutput,
 } from '../lib/chat'
+import { ChatMovieResults } from './ChatMovieResults'
 import { ToolActivity } from './ToolActivity'
 import { WatchlistConfirm, WatchlistOutcome } from './WatchlistConfirm'
 
@@ -24,6 +26,9 @@ interface ChatMessageProps {
  */
 export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
     const isUser = message.role === 'user'
+    // The movies this turn surfaced across its tool calls, rendered as a clickable
+    // strip below the text (assistant turns only; empty otherwise).
+    const suggestedMovies = extractSuggestedMovies(message)
 
     return (
         <Message align={isUser ? 'end' : 'start'}>
@@ -71,6 +76,8 @@ export function ChatMessage({ message, onToolResult }: ChatMessageProps) {
 
                     return null
                 })}
+
+                <ChatMovieResults movies={suggestedMovies} />
             </MessageContent>
         </Message>
     )

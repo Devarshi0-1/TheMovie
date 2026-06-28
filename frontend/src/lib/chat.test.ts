@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
     clearStoredConversationId,
+    extractSuggestedMovies,
     fetchConversationMessages,
     isToolPart,
     loadStoredConversationId,
@@ -9,7 +10,115 @@ import {
     storeConversationId,
     toolLabel,
     toolNameOf,
+    type AppUIMessage,
 } from './chat'
+
+const aMovie = (tmdbId: number, title: string) => ({
+    tmdbId,
+    title,
+    overview: null,
+    releaseDate: '2020-01-01',
+    genres: [],
+    posterPath: null,
+})
+
+const assistant = (parts: unknown[]): AppUIMessage =>
+    ({ id: 'm', role: 'assistant', parts }) as unknown as AppUIMessage
+
+describe('extractSuggestedMovies', () => {
+    it('collects movies from a retrieval tool output (feature)', () => {
+        const movies = extractSuggestedMovies(
+            assistant([
+                { type: 'text', text: 'Here are some picks.' },
+                {
+                    type: 'tool-search_movies_sql',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: [aMovie(1, 'Dune'), aMovie(2, 'Arrival')],
+                },
+            ]),
+        )
+        expect(movies.map((m) => m.title)).toEqual(['Dune', 'Arrival'])
+    })
+
+    it('dedupes across multiple tool calls, preserving order (feature)', () => {
+        const movies = extractSuggestedMovies(
+            assistant([
+                {
+                    type: 'tool-search_movies_sql',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: [aMovie(1, 'Dune')],
+                },
+                {
+                    type: 'tool-find_similar_movies',
+                    toolCallId: 't2',
+                    state: 'output-available',
+                    output: [aMovie(1, 'Dune'), aMovie(3, 'Sicario')],
+                },
+            ]),
+        )
+        expect(movies.map((m) => m.tmdbId)).toEqual([1, 3])
+    })
+
+    it('accepts a single-movie details output too (feature)', () => {
+        const movies = extractSuggestedMovies(
+            assistant([
+                {
+                    type: 'tool-get_movie_details',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: {
+                        ...aMovie(7, 'Tenet'),
+                        tagline: null,
+                        runtime: 150,
+                        voteAverage: 7.3,
+                    },
+                },
+            ]),
+        )
+        expect(movies.map((m) => m.title)).toEqual(['Tenet'])
+    })
+
+    // ── Edge cases ────────────────────────────────────────────────────────
+    it('ignores non-movie tool outputs and unresolved calls (edge)', () => {
+        const movies = extractSuggestedMovies(
+            assistant([
+                // A review summary — not a movie.
+                {
+                    type: 'tool-summarize_reviews',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: { vibe: 'Loved it', pros: [], cons: [] },
+                },
+                // A still-running search — no output yet.
+                { type: 'tool-search_movies_sql', toolCallId: 't2', state: 'input-available' },
+            ]),
+        )
+        expect(movies).toEqual([])
+    })
+
+    it('excludes the manage_watchlist tool and user turns (edge)', () => {
+        const fromWatchlist = extractSuggestedMovies(
+            assistant([
+                {
+                    type: 'tool-manage_watchlist',
+                    toolCallId: 't1',
+                    state: 'output-available',
+                    output: [aMovie(1, 'Dune')],
+                },
+            ]),
+        )
+        expect(fromWatchlist).toEqual([])
+
+        const userTurn = extractSuggestedMovies({
+            id: 'u',
+            role: 'user',
+            parts: [{ type: 'text', text: 'hi' }],
+        } as unknown as AppUIMessage)
+        expect(userTurn).toEqual([])
+    })
+})
 
 describe('chat part helpers', () => {
     it('detects tool parts by type prefix', () => {

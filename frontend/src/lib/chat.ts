@@ -1,4 +1,4 @@
-import type { ManageWatchlistInput } from '@themovie/schemas'
+import { MovieResultSchema, type ManageWatchlistInput, type MovieResult } from '@themovie/schemas'
 import { DefaultChatTransport, type UIDataTypes, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { API_BASE, apiFetch } from './api'
@@ -85,6 +85,47 @@ export function toolLabel(name: string, done: boolean): string {
     if (labels) return done ? labels.done : labels.running
     const pretty = name.replace(/_/g, ' ')
     return done ? `Ran ${pretty}` : `Running ${pretty}`
+}
+
+// ── Suggested movies (chat result cards) ─────────────────────────────────────
+// The retrieval tools (search/semantic/tmdb/person/similar/trending/details)
+// return movies as their tool output. We harvest those so the chat can render
+// the agent's picks as clickable cards instead of leaving them buried in prose.
+// Non-movie tool outputs (review summaries, watch providers) simply don't parse
+// as a movie and are skipped; manage_watchlist is excluded explicitly.
+
+const MovieArraySchema = z.array(MovieResultSchema)
+const SUGGESTED_MOVIES_CAP = 12
+
+function moviesFromOutput(output: unknown): MovieResult[] {
+    const asArray = MovieArraySchema.safeParse(output)
+    if (asArray.success) return asArray.data
+    const asSingle = MovieResultSchema.safeParse(output)
+    return asSingle.success ? [asSingle.data] : []
+}
+
+/**
+ * The distinct movies an assistant turn surfaced across its tool calls, in call
+ * order, deduped by tmdbId and capped. Empty for user turns or a turn that ran
+ * no movie-returning tool — so the caller renders the card strip only when there
+ * is something to show.
+ */
+export function extractSuggestedMovies(message: AppUIMessage): MovieResult[] {
+    if (message.role !== 'assistant') return []
+
+    const seen = new Set<number>()
+    const out: MovieResult[] = []
+    for (const part of message.parts) {
+        if (!isToolPart(part) || part.state !== 'output-available') continue
+        if (toolNameOf(part) === MANAGE_WATCHLIST) continue
+        for (const movie of moviesFromOutput(part.output)) {
+            if (out.length >= SUGGESTED_MOVIES_CAP) break
+            if (seen.has(movie.tmdbId)) continue
+            seen.add(movie.tmdbId)
+            out.push(movie)
+        }
+    }
+    return out
 }
 
 // ── Cross-session resume ────────────────────────────────────────────────────
